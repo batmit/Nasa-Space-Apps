@@ -43,3 +43,27 @@ curl -X POST http://127.0.0.1:8000/api/v1/recomendar \
 O endpoint de recomendação retorna uma resposta fixa com `simulacao: true`.
 As coordenadas são validadas, mas ainda não são utilizadas para consultas
 climáticas ou avaliação agronômica.
+
+## Integração contínua
+
+O workflow `.github/workflows/ci.yml` executa a cada push em `back-end` e
+na abertura, reabertura ou atualização de pull requests para `main` ou `back-end`.
+Utiliza Python 3.12, verifica a sintaxe do backend e a importação do FastAPI,
+e executa os testes de `test/` com pytest.
+
+Para executar os testes localmente, na raiz do repositório:
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pytest test/ -q
+```
+
+Crie testes com nomes `test_*.py`. O HTTPX está incluído para testes da API
+com o `TestClient` do FastAPI. Enquanto não houver testes, o pytest retorna
+código 5, aceito pelo CI; falhas nos testes ou na coleta continuam bloqueando o job.
+O arquivo `test/.gitkeep` mantém a pasta presente no checkout do Git.
+
+Os arquivos do frontend estão vazios; ainda não há build ou testes de interface.
+Este workflow faz integração contínua, sem implantação automática. Para impedir
+merges com falhas, configure o check `tests` como obrigatório nas regras de
+proteção de `main` e `back-end` no GitHub.
