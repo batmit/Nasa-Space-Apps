@@ -161,15 +161,15 @@ for (const failure of ["http", "network", "malformed"]) {
 
 test("ambiguous culture choices return to the form and are used on resubmission", async ({ page }) => {
   await page.route(endpoint, (route) => route.fulfill({ json: result(route.request().postDataJSON(), {
-    opcoes_cultura: [{ id: 1, nome: "MILHO SEQUEIRO" }],
+    opcoes_cultura: [{ id: 1, nome: "MILHO SEQUEIRO" }, { id: 2, nome: "MILHO IRRIGADO", cultivo: "IRRIGADO" }],
   }) }));
   await next(page);
   await page.locator("#btnSubmitToBackend").click();
-  await page.getByRole("button", { name: "MILHO SEQUEIRO", exact: true }).click();
+  await page.locator("#cultureOptions").getByRole("button", { name: "MILHO SEQUEIRO · modalidade a conferir", exact: true }).click();
   await expect(page.locator("#screen-2")).toHaveAttribute("aria-hidden", "false");
-  await expect(page.locator("#cropSelect")).toHaveValue("MILHO SEQUEIRO");
+  await expect(page.locator("#cropSelect")).toHaveValue("agritec:1");
   await page.route(endpoint, (route) => {
-    expect(route.request().postDataJSON().cultura_desejada).toBe("MILHO SEQUEIRO");
+    expect(route.request().postDataJSON()).toMatchObject({ cultura_desejada: "MILHO SEQUEIRO", id_cultura: 1 });
     return route.fulfill({ json: result(route.request().postDataJSON()) });
   });
   await page.locator("#btnSubmitToBackend").click();
