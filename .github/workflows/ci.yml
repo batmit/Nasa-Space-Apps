@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  tests:
+  backend:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -29,11 +29,30 @@ jobs:
           python -m compileall -q src/backend
           python -c "from src.backend.main import app"
       - name: Run tests
-        run: |
-          status=0
-          python -m pytest test/ -q || status=$?
-          if [ "$status" -eq 5 ]; then
-            echo "::notice::No tests collected in test/ yet."
-          else
-            exit "$status"
-          fi
+        run: python -m pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: src/frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: frontend-test-results
+          path: src/frontend/test-results/
+          retention-days: 7
