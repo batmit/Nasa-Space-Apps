@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { ApiError, buildPayload, recomendar, requestJson } from "../src/frontend/api.js";
-import { renderClimate, renderResults, renderZarc } from "../src/frontend/results.js";
+import { ApiError, buildPayload, recomendar, requestJson } from "../api.js";
+import { renderClimate, renderResults, renderZarc } from "../results.js";
 
 const input = {
   regiao_nome: "Ouro Preto, MG", latitude: "-20.3856", longitude: "-43.5035",
@@ -84,8 +84,8 @@ test("resultado renderiza fontes reais como texto e limpa dados da consulta ante
 });
 
 test("interface não contém simulador nem uma rota paralela de recomendação", () => {
-  const app = readFileSync(new URL("../src/frontend/app.js", import.meta.url), "utf8");
-  const html = readFileSync(new URL("../src/frontend/index.html", import.meta.url), "utf8");
+  const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   assert.doesNotMatch(app, /buildMockBackendResponse|localhost:8000\/api\/recomendacao|nominatim\.openstreetmap\.org/);
   assert.match(app, /https:\/\/tile\.openstreetmap\.org\/\{z\}\/\{x\}\/\{y\}\.png/);
   assert.doesNotMatch(app, /basemaps\.cartocdn\.com/);
