@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from .clima import ResumoClimatico
+from .gemini import StructuredGeminiOutput
 
 
 class TipoSolo(str, Enum):
@@ -40,6 +41,7 @@ class DadosAgricultor(BaseModel):
     cultura_desejada: str = Field(min_length=1, max_length=100)
     id_cultura: int | None = Field(default=None, gt=0, strict=True)
     tipo_solo: TipoSolo
+    tipo_solo_informado: TipoSolo | None = None
     ph: float = Field(ge=0, le=14)
     forma_irrigacao: FormaIrrigacao
     historico_area: str = Field(min_length=1, max_length=200)
@@ -115,6 +117,8 @@ class Orientacao(BaseModel):
 
 class RecomendacaoResponse(BaseModel):
     status: Literal["orientacao_condicional", "dados_insuficientes"]
+    explicacao_ia: StructuredGeminiOutput | None = None
+    status_ia: Literal["nao_configurado", "disponivel", "indisponivel"] = "nao_configurado"
     dados_informados: DadosAgricultor
     municipio: Municipio
     cultura: OpcaoCultura | None = None

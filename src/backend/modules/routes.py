@@ -21,6 +21,19 @@ def obter_localizador() -> LocalizacaoClient:
         raise HTTPException(status_code=503, detail="Localização não configurada no servidor.") from None
 
 
+def obter_orientador_ia():
+    # Importação e credenciais opcionais: nenhuma inicialização ao importar módulos.
+    if not os.getenv("GEMINI_API_KEY"):
+        return None
+    from google import genai
+    from ..integration.gemini_api import GeminiClient
+    client = genai.Client(
+        api_key=os.environ["GEMINI_API_KEY"],
+        http_options={"timeout": 30000},
+    )
+    return GeminiClient(client, model=os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"))
+
+
 @lru_cache(maxsize=1)
 def obter_servico_recomendacao() -> RecomendacaoService:
     """Composição dos adaptadores; substituível em testes via dependency_overrides."""
@@ -29,6 +42,7 @@ def obter_servico_recomendacao() -> RecomendacaoService:
             zoneamento=EmbrapaClient() if os.getenv("EMBRAPA_ACCESS_TOKEN") else None,
             referencias=RespondeAgroClient() if (os.getenv("EMBRAPA_RESPONDEAGRO_TOKEN") or os.getenv("EMBRAPA_ACCESS_TOKEN")) else None,
             localizador=obter_localizador(), clima=NasaClimaService(),
+            orientacao_ia=obter_orientador_ia(),
         )
     except ValueError:
         raise HTTPException(status_code=503, detail="Integrações não configuradas no servidor.") from None

@@ -253,18 +253,23 @@ npx playwright install chromium
 npm test
 ```
 
-Para executar somente uma camada do frontend:
+Os testes usam fontes simuladas e não consomem requisições das APIs.
+Os testes unitários JavaScript usam o runner nativo do Node. Para executar também
+os testes de navegador (Playwright), a partir da raiz do repositório:
 
 ```bash
-npm --prefix src/frontend run test:unit
-npm --prefix src/frontend run test:browser
+npm --prefix src/frontend ci
+npm --prefix src/frontend exec -- playwright install chromium
+npm --prefix src/frontend test
 ```
 
-Os dois últimos comandos devem ser executados a partir da raiz. Em Linux, se faltarem bibliotecas do navegador, use `npx playwright install --with-deps chromium` dentro de `src/frontend`.
+Para executar apenas o cenário de seleção de cultura ambígua:
 
-Os testes usam fontes simuladas e não exigem tokens nem consultas às APIs externas. O Playwright inicia e encerra um servidor estático local na porta 8765; as respostas da API e recursos externos são interceptados. A indisponibilidade do mapa é exercitada pelo fluxo alternativo de coordenadas; os testes não verificam Leaflet, tiles, estilos Tailwind ou os serviços externos. Não são testes integrados de ponta a ponta entre frontend e backend.
+```bash
+npm --prefix src/frontend run test:browser -- --grep "ambiguous culture"
+```
 
-A CI executa backend e frontend em jobs independentes nos pushes para `back-end` e nos pull requests destinados a `main` ou `back-end`. Falhas nos testes falham o job. Traces de falhas do Playwright são disponibilizados como artefato `frontend-test-results`.
+O `package.json` fica em `src/frontend`; `npm test` na raiz não é configurado.
 
 ## Referências das integrações
 
@@ -274,3 +279,30 @@ A CI executa backend e frontend em jobs independentes nos pushes para `back-end`
 - [Localidades IBGE](https://servicodados.ibge.gov.br/api/docs/localidades)
 - [NASA POWER — dados diários](https://power.larc.nasa.gov/docs/services/api/temporal/daily/)
 - [Embrapa — rotação e cobertura do solo](https://www.embrapa.br/web/agencia-de-informacao-tecnologica/cultivos/milho/producao/rotacao-de-culturas)
+
+### Orientação personalizada com Gemini (opcional)
+
+Instale `requirements.txt` e configure `GEMINI_API_KEY` no ambiente do servidor.
+O código não carrega arquivos `.env` automaticamente. Nunca coloque a chave no
+frontend ou no Git. `GEMINI_MODEL` permite substituir o modelo padrão
+`gemini-3.1-flash-lite`. Reinicie o servidor ao alterar essas variáveis.
+
+Após reunir as fontes, `RecomendacaoService` envia um snapshot JSON com todos
+os campos do formulário (cultura, solo, pH, histórico, irrigação, objetivo,
+restrições e localização), o resumo NASA com período/cobertura/avisos,
+referências Embrapa, janelas ZARC confirmadas e condicionais, diagnóstico,
+orientações existentes e pendências. Quando há classe ZARC, a descrição original
+do solo é preservada em `tipo_solo_informado`. O histórico NASA bruto continua
+no fluxo existente; a IA recebe os indicadores calculados, não a série diária.
+
+A resposta de `/api/v1/recomendar` inclui `explicacao_ia` (`resumo`, `actions`)
+e `status_ia`: `nao_configurado`, `disponivel` ou `indisponivel`. A interface atual
+continua mostrando as orientações existentes; a explicação da IA fica disponível
+no JSON da API. Cada ação cita IDs de `evidencias_contexto`; IDs desconhecidos
+invalidam a geração. Essa checagem não comprova a correção agronômica do texto.
+
+A integração usa cliente injetável, saída estruturada e timeout HTTP de 30 s,
+sem estado de conversa armazenado (`store=False`). Sem chave, não chama Gemini;
+em falhas de geração, preserva os resultados existentes e informa um aviso.
+A geração não altera a validação de restrições, cálculos climáticos ou filtros
+ZARC. Testes sem rede: `python -m pytest test/test_gemini_api.py`.

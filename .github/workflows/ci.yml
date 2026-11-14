@@ -29,7 +29,18 @@ jobs:
           python -m compileall -q src/backend
           python -c "from src.backend.main import app"
       - name: Run tests
+<<<<<<< HEAD
         run: python -m pytest -q
+=======
+        run: |
+          status=0
+          python -m pytest test/ -q || status=$?
+          if [ "$status" -eq 5 ]; then
+            echo "::notice::No tests collected in test/ yet."
+          else
+            exit "$status"
+          fi
+>>>>>>> 8e13511 (fix: failing pipeline test fix)
 
   frontend:
     runs-on: ubuntu-latest

@@ -56,7 +56,10 @@ class Element {
   constructor(tag) { this.tag = tag; this.children = []; this.textContent = ""; this.classList = { toggle: (name, enabled) => { this[name] = enabled; } }; }
   append(...children) { this.children.push(...children); }
   replaceChildren(...children) { this.children = children; }
-  addEventListener() {}
+  addEventListener(name, callback) {
+    this.listeners ??= {};
+    this.listeners[name] = callback;
+  }
   set innerHTML(_) { throw new Error("Conteúdo externo não deve ser renderizado como HTML"); }
 }
 
@@ -144,4 +147,40 @@ test("janelas condicionais ficam separadas das confirmadas e são limpas ao repe
   assert.equal(nodes.get("conditionalWindowsSection").hidden, true);
   renderZarc({ status_zarc: "falha_autenticacao", janelas: [], janelas_condicionais: [] });
   assert.match(nodes.get("zarcStatus").textContent, /recusado/);
+});
+
+test("payload preserva descrição do solo separada da classe ZARC", () => {
+  const payload = buildPayload(form({ ...input, tipo_solo: "AD1", tipo_solo_informado: "raso" }));
+  assert.equal(payload.tipo_solo, "AD1");
+  assert.equal(payload.tipo_solo_informado, "raso");
+});
+
+
+test("opções de cultura exibem modalidade e preservam o ID no callback", (context) => {
+  const nodes = new Map();
+  globalThis.document = {
+    createElement: (tag) => new Element(tag),
+    getElementById: (id) => {
+      if (!nodes.has(id)) nodes.set(id, new Element("div"));
+      return nodes.get(id);
+    },
+  };
+  context.after(() => { delete globalThis.document; });
+  const choices = [
+    { id: 1, nome: "MILHO SEQUEIRO" },
+    { id: 2, nome: "MILHO IRRIGADO", cultivo: "IRRIGADO" },
+  ];
+  let selected;
+  renderResults({
+    status: "dados_insuficientes", municipio: { nome: "Ouro Preto", uf: "MG" },
+    dados_informados: input, janelas: [], orientacoes: [], pendencias: [],
+    avisos: [], referencias: [], fontes: [], opcoes_cultura: choices,
+  }, (option) => { selected = option; });
+  const buttons = nodes.get("cultureOptions").children;
+  assert.equal(buttons[0].textContent, "MILHO SEQUEIRO · modalidade a conferir");
+  assert.equal(buttons[1].textContent, "MILHO IRRIGADO · IRRIGADO");
+  buttons[0].listeners.click();
+  assert.equal(selected, choices[0]);
+  buttons[1].listeners.click();
+  assert.equal(selected, choices[1]);
 });
