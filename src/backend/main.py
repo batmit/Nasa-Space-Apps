@@ -1,11 +1,11 @@
-import requests
-import pandas as pd
+from fastapi import FastAPI
 
-URL = ''
+from .modules.routes import router
 
-def main():
-    pass
+app = FastAPI(
+    title="AgroOrbit API",
+    description="API para análise climática e comparação de rotações de culturas.",
+    version="0.1.0",
+)
 
-
-if __name__ == '__main__':
-    main()
+app.include_router(router, prefix="/api/v1")
