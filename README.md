@@ -32,7 +32,7 @@ três etapas: localização, informações da área e resultado.
 - `src/frontend/styles.css`: estilos do layout e dos resultados.
 
 O frontend chama `/api/v1/recomendar`. A tela mostra janelas ZARC, referências,
-avisos e pendências. Não existem respostas simuladas de contingência: falhas
+avisos, pendências, indicadores NASA e orientações de manejo com evidências. Não existem respostas simuladas de contingência: falhas
 mostram uma mensagem e permitem repetir a consulta. Doses de calcário, impactos
 percentuais e séries NASA fictícias do protótipo foram removidos.
 
@@ -54,7 +54,9 @@ provedor contratado ou hospedagem própria conforme a política do serviço.
 - `src/backend/services/recomendacao.py`: seleção de cultura, filtros e orientações.
 - `src/backend/integration/embrapa.py`: clientes Agritec e RespondeAgro.
 - `src/backend/integration/localizacao.py`: coordenadas → município OpenStreetMap → código IBGE.
-- `src/backend/integration/nasa_power.py`: integração independente, ainda fora deste fluxo.
+- `src/backend/integration/nasa_power.py`: coleta NASA POWER e cache dos dados brutos.
+- `src/backend/services/clima.py`: qualidade dos dados e resumo dos últimos três anos completos.
+- `src/backend/services/manejo.py`: regras de orientação com evidências e referências.
 
 Conforme as funcionalidades crescerem, as rotas poderão ser separadas em
 arquivos por módulo, mantendo a inicialização em `main.py`.
@@ -66,7 +68,7 @@ arquivos por módulo, mantendo a inicialização em `main.py`.
 | GET | `/api/v1/health` | Verificar se a API está respondendo. |
 | GET | `/api/v1/localizacao/buscar?consulta=Ouro%20Preto%20MG` | Buscar um ponto e identificar seu município. |
 | GET | `/api/v1/localizacao/reversa?latitude=-20.3856&longitude=-43.5035` | Identificar o município do ponto selecionado. |
-| POST | `/api/v1/recomendar` | Consultar janelas ZARC e referências técnicas. |
+| POST | `/api/v1/recomendar` | Combinar histórico NASA, janelas ZARC e orientações de manejo. |
 
 Exemplo:
 
@@ -87,6 +89,10 @@ Configure no ambiente do backend, sem expor tokens ao frontend:
   contato do responsável (padrão: `AgroOrbit/0.1`).
 - `NOMINATIM_BASE_URL`: provedor de geocodificação, com HTTPS. Padrão:
   `https://nominatim.openstreetmap.org`.
+
+A NASA POWER não exige token. Sem os tokens Embrapa, o serviço retorna as
+orientações climáticas disponíveis e informa que a janela ZARC e as referências
+Agritec/RespondeAgro não foram validadas; não inventa respostas dessas APIs.
 
 Os clientes são criados na primeira consulta e compartilhados no processo.
 Reinicie o servidor depois de alterar a configuração.
@@ -110,7 +116,9 @@ O risco ZARC é fixado internamente em 20%.
 - `historico_area` e `objetivo`: textos obrigatórios de até 200 caracteres,
   aceitando os códigos do frontend, como `monocultura_pousio` e `recuperar_solo`.
   São preservados em `dados_informados` e utilizados como termos de busca na
-  RespondeAgro. Não representam diagnóstico ou validação de práticas.
+  RespondeAgro. Objetivos de recuperar solo/conservar água também acionam
+  orientações gerais de cobertura, com referência técnica. Não representam
+  diagnóstico ou seleção automática de uma espécie de rotação.
 - `tipo_solo`: `arenoso`, `argiloso`, `textura_media`, `raso`, ou `AD1` a `AD6`.
   Textura não é convertida automaticamente em classe de disponibilidade de água.
   A opção de terra mista da interface envia `textura_media`. `raso` descreve
@@ -125,9 +133,11 @@ O risco ZARC é fixado internamente em 20%.
 
 A resposta contém `status`, município, cultura selecionada, janelas com solo,
 ciclo, safra e portaria, orientações, referências, pendências e avisos.
-`orientacao_condicional` indica que há janelas compatíveis; não significa que
-todas as condições da propriedade foram validadas. `dados_insuficientes` indica
-ausência de janelas compatíveis ou cultura não identificada de forma unívoca.
+`orientacao_condicional` indica que existe histórico climático utilizável ou
+janelas ZARC compatíveis para fundamentar orientações. Não significa aptidão da
+cultura ou que todas as condições da propriedade foram validadas.
+`dados_insuficientes` indica ausência das duas bases. Pendências descrevem
+explicitamente o que não foi validado, mesmo quando há orientações disponíveis.
 Nomes ambíguos retornam opções para selecionar pelo nome completo, sem escolher
 um ID arbitrário. Catálogos sem correspondência não comprovam inaptidão.
 
@@ -136,22 +146,54 @@ sem afirmar que se pode plantar hoje. O histórico resumido da área não inform
 espécies e datas; não validamos uma sequência de rotação. A RespondeAgro retorna referências de publicações, não prescrições
 personalizadas; textos são devolvidos sem marcação HTML.
 
-`analise_climatica_realizada` permanece `false`: não há leitura nem alteração
-da integração NASA. O serviço recebe dependências por interfaces (`Protocol`),
-permitindo testar ou substituir as fontes sem acoplar as rotas aos clientes.
+## NASA e recomendações
 
-Falhas de Agritec/localização retornam HTTP 502; localização não identificável,
-422; configuração ausente, 503. Falha apenas na RespondeAgro preserva os demais
-resultados e acrescenta um aviso. Não há chamadas externas ao importar a API.
+O contrato de entrada do frontend continua com dez campos. O backend escolhe
+os três anos completos anteriores ao ano atual (em 2026: 2023–2025) e chama a
+função existente `request_NASA_API`. O cache em
+`src/backend/data/raw/nasa_power/` é reutilizado, fica fora do Git e mantém
+`response.json` e `metadata.json` para cada consulta. Dados de anos completos
+não têm expiração automática; `force_refresh=True` permite atualizar a coleta.
+
+`analise_climatica_realizada` é `true` somente quando o resumo foi calculado
+com unidades reconhecidas e pelo menos 90% dos dias válidos em chuva e
+temperatura média. `resumo_climatico` inclui período, cobertura por parâmetro,
+médias mensais, chuva média anual, temperaturas, radiação e sequência máxima
+de dias com precipitação inferior a 1 mm/dia. Valores ausentes não viram zero.
+Totais de chuva exigem meses/anos completos; um total incompleto é omitido.
+Radiação é normalizada para **MJ/m²/dia** e a umidade é **relativa do ar a 2 m**,
+não umidade das raízes. Lacunas e limitações são apresentadas na resposta.
+
+As regras de manejo são separadas da coleta e explicam seus fundamentos:
+
+- Janelas compatíveis → orientar o planejamento dentro das condições ZARC.
+- Sequências sem chuva observadas → orientar conservação de água e cobertura,
+  distinguindo sequeiro de cultivo irrigado, sem calcular lâmina de irrigação.
+- Médias mensais válidas → contextualizar a sazonalidade em relação às janelas
+  disponíveis; não ampliar a janela oficial nem prever as próximas chuvas.
+- Objetivo de recuperação/conservação → orientar cobertura e planejamento da
+  diversificação, sem recomendar uma espécie sem validação local.
+
+Os itens em `orientacoes` possuem texto, fonte, evidências e link quando
+aplicável. O histórico recente de três anos não é uma normal climatológica,
+uma previsão de safra ou uma projeção de mudanças climáticas. Não há cálculo
+de dose de calcário/adubo nem garantia de produtividade, lucro ou aptidão.
+Restrições livres continuam registradas para avaliação técnica.
+
+Falhas da NASA, Agritec ou RespondeAgro preservam as demais fontes e aparecem
+em avisos/pendências. Localização não identificável retorna 422 e falhas de
+rede na localização, 502. Configuração inválida no servidor retorna 503.
+O serviço recebe dependências por `Protocol`; testes podem substituir as
+fontes sem acessar a rede. Não há consultas externas ao importar a API.
 
 ## Verificação
 
 Com as dependências de `requirements.txt` instaladas:
 
 ```bash
-python -m pip install httpx
-python -m unittest discover -s tests -v
-node --test tests/frontend.test.mjs
+python -m pip install pytest httpx
+python -m pytest test -q
+node --test test/frontend.test.mjs
 ```
 
 Os testes usam fontes simuladas e não consomem requisições das APIs.
@@ -163,3 +205,5 @@ Os testes JavaScript usam o runner nativo do Node, sem pacotes npm adicionais.
 - [RespondeAgro v1](https://www.agroapi.cnptia.embrapa.br/store/api-docs/agroapi/RespondeAgro/v1)
 - [Política Nominatim](https://operations.osmfoundation.org/policies/nominatim/)
 - [Localidades IBGE](https://servicodados.ibge.gov.br/api/docs/localidades)
+- [NASA POWER — dados diários](https://power.larc.nasa.gov/docs/services/api/temporal/daily/)
+- [Embrapa — rotação e cobertura do solo](https://www.embrapa.br/web/agencia-de-informacao-tecnologica/cultivos/milho/producao/rotacao-de-culturas)

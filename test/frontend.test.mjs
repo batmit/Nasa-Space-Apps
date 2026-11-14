@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { ApiError, buildPayload, recomendar, requestJson } from "../src/frontend/api.js";
-import { renderResults } from "../src/frontend/results.js";
+import { renderClimate, renderResults } from "../src/frontend/results.js";
 
 const input = {
   regiao_nome: "Ouro Preto, MG", latitude: "-20.3856", longitude: "-43.5035",
@@ -85,4 +85,28 @@ test("interface não contém simulador nem uma rota paralela de recomendação",
   assert.doesNotMatch(app, /basemaps\.cartocdn\.com/);
   assert.match(html, /value="textura_media"/);
   assert.doesNotMatch(html, /value="misto"|Precisa calcário|Impacto Esperado/);
+});
+
+test("resumo NASA exibe unidades corretas e limpa métricas quando indisponível", (context) => {
+  const nodes = new Map();
+  globalThis.document = {
+    createElement: (tag) => new Element(tag),
+    getElementById: (id) => {
+      if (!nodes.has(id)) nodes.set(id, new Element("div"));
+      return nodes.get(id);
+    },
+  };
+  context.after(() => { delete globalThis.document; });
+  renderClimate({
+    data_inicio: "2023-01-01", data_fim: "2025-12-31", precipitacao_media_anual_mm: 1000,
+    temperatura_media_c: 20, umidade_relativa_ar_pct: 70, radiacao_media_mj_m2_dia: 14.4,
+    maior_sequencia_dias_sem_chuva: 20, meses: [{ mes: 1, precipitacao_media_mm: 100, temperatura_media_c: 20, anos_chuva_completos: 3 }],
+  }, true);
+  assert.match(nodes.get("nasaStatus").textContent, /2023-01-01/);
+  assert.equal(nodes.get("climateMetrics").children[2].children[0].textContent, "Umidade relativa do ar a 2 m");
+  assert.match(nodes.get("climateMetrics").children[3].children[1].textContent, /MJ\/m²\/dia/);
+  renderClimate(null, false);
+  assert.equal(nodes.get("climateMetrics").children.length, 0);
+  assert.equal(nodes.get("climateMonthly").children.length, 0);
+  assert.match(nodes.get("nasaStatus").textContent, /indisponível/);
 });

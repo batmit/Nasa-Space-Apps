@@ -1,3 +1,4 @@
+import os
 from functools import lru_cache
 from typing import Annotated
 
@@ -7,6 +8,7 @@ from ..integration.embrapa import EmbrapaClient, EmbrapaError, RespondeAgroClien
 from ..integration.localizacao import LocalizacaoClient, LocalizacaoError
 from ..models.recomendacao import DadosAgricultor, LocalizacaoSelecionada, RecomendacaoResponse
 from ..services.recomendacao import RecomendacaoService
+from ..services.clima import NasaClimaService
 
 router = APIRouter()
 
@@ -24,8 +26,9 @@ def obter_servico_recomendacao() -> RecomendacaoService:
     """Composição dos adaptadores; substituível em testes via dependency_overrides."""
     try:
         return RecomendacaoService(
-            zoneamento=EmbrapaClient(), referencias=RespondeAgroClient(),
-            localizador=obter_localizador(),
+            zoneamento=EmbrapaClient() if os.getenv("EMBRAPA_ACCESS_TOKEN") else None,
+            referencias=RespondeAgroClient() if (os.getenv("EMBRAPA_RESPONDEAGRO_TOKEN") or os.getenv("EMBRAPA_ACCESS_TOKEN")) else None,
+            localizador=obter_localizador(), clima=NasaClimaService(),
         )
     except ValueError:
         raise HTTPException(status_code=503, detail="Integrações não configuradas no servidor.") from None
@@ -63,10 +66,10 @@ def resolver_localizacao(
     "/recomendar",
     tags=["Rotações"],
     response_model=RecomendacaoResponse,
-    summary="Obter orientações condicionais com fontes da Embrapa",
+    summary="Obter orientações condicionais com NASA POWER e Embrapa",
     description=(
-        "Consulta município, catálogo, janelas ZARC e referências técnicas. "
-        "A análise NASA ainda não está integrada. Restrições livres exigem avaliação técnica."
+        "Consulta o histórico NASA, município, janelas ZARC e referências técnicas. "
+        "Falhas de fontes retornam pendências explícitas. Restrições livres exigem avaliação técnica."
     ),
 )
 def recomendar(

@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .clima import ResumoClimatico
+
 
 class TipoSolo(str, Enum):
     ARENOSO = "arenoso"
@@ -90,6 +92,8 @@ class Orientacao(BaseModel):
     tema: str
     texto: str
     fonte: str
+    evidencias: list[str] = Field(default_factory=list)
+    url_fonte: str | None = None
 
 
 class RecomendacaoResponse(BaseModel):
@@ -105,4 +109,5 @@ class RecomendacaoResponse(BaseModel):
     avisos: list[str] = Field(default_factory=list)
     restricoes_avaliadas: bool = False
     analise_climatica_realizada: bool = False
+    resumo_climatico: ResumoClimatico | None = None
     fontes: list[str] = Field(default_factory=list)

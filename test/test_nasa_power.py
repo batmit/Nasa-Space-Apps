@@ -124,7 +124,7 @@ def test_force_refresh_updates_response_and_metadata(isolated_environment, paylo
     respond(isolated_environment, payload)
     nasa_power.request_NASA_API(*QUERY)
     response, metadata = cache_files()
-    saved = json.loads(metadata.read_text())
+    saved = json.loads(metadata.read_text(encoding="utf-8"))
     saved["fetched_at"] = "2000-01-01T00:00:00+00:00"
     metadata.write_text(json.dumps(saved))
     updated = copy.deepcopy(payload)
@@ -134,8 +134,8 @@ def test_force_refresh_updates_response_and_metadata(isolated_environment, paylo
     assert nasa_power.request_NASA_API(*QUERY, force_refresh=True) == updated
 
     assert isolated_environment.call_count == 2
-    assert json.loads(response.read_text()) == updated
-    assert json.loads(metadata.read_text())["fetched_at"] != saved["fetched_at"]
+    assert json.loads(response.read_text(encoding="utf-8")) == updated
+    assert json.loads(metadata.read_text(encoding="utf-8"))["fetched_at"] != saved["fetched_at"]
 
 
 @pytest.mark.parametrize("bad_date", [
@@ -217,13 +217,15 @@ def test_every_requested_series_is_required(isolated_environment, payload, param
     assert not nasa_power.RAW_DIR.exists()
 
 
-@pytest.mark.parametrize("damage", ["invalid-json", "invalid-series", "missing-response", "missing-metadata"])
+@pytest.mark.parametrize("damage", ["invalid-json", "invalid-encoding", "invalid-series", "missing-response", "missing-metadata"])
 def test_damaged_cache_is_refetched(isolated_environment, payload, damage):
     respond(isolated_environment, payload)
     nasa_power.request_NASA_API(*QUERY)
     response, metadata = cache_files()
     if damage == "invalid-json":
         response.write_text("{")
+    elif damage == "invalid-encoding":
+        response.write_bytes(b'\xff')
     elif damage == "invalid-series":
         response.write_text('{}')
     else:
@@ -232,8 +234,8 @@ def test_damaged_cache_is_refetched(isolated_environment, payload, damage):
     assert nasa_power.request_NASA_API(*QUERY) == payload
 
     assert isolated_environment.call_count == 2
-    assert json.loads(response.read_text()) == payload
-    assert json.loads(metadata.read_text())["source"] == "NASA POWER"
+    assert json.loads(response.read_text(encoding="utf-8")) == payload
+    assert json.loads(metadata.read_text(encoding="utf-8"))["source"] == "NASA POWER"
 
 
 @pytest.mark.parametrize("stage", ["write", "replace"])
@@ -268,8 +270,6 @@ def test_request_propagates_storage_failure(monkeypatch, isolated_environment, p
     assert list(nasa_power.RAW_DIR.rglob("*.json")) == []
 
 
-@pytest.mark.xfail(strict=True, raises=(pytest.fail.Exception, AssertionError),
-                   reason="Known gap: request_NASA_API does not validate coordinate ranges or finiteness")
 @pytest.mark.parametrize("latitude,longitude", [
     (-91, 0), (91, 0), (0, -181), (0, 181),
     (float("nan"), 0), (0, float("nan")),
@@ -290,7 +290,6 @@ def test_coordinate_boundaries_are_accepted(isolated_environment, payload, latit
     isolated_environment.assert_called_once()
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Known gap: cached metadata is not read or validated")
 def test_corrupt_metadata_triggers_refetch(isolated_environment, payload):
     respond(isolated_environment, payload)
     nasa_power.request_NASA_API(*QUERY)
@@ -300,10 +299,9 @@ def test_corrupt_metadata_triggers_refetch(isolated_environment, payload):
     assert nasa_power.request_NASA_API(*QUERY) == payload
 
     assert isolated_environment.call_count == 2
-    assert json.loads(metadata.read_text())["source"] == "NASA POWER"
+    assert json.loads(metadata.read_text(encoding="utf-8"))["source"] == "NASA POWER"
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Known gap: response and metadata updates are not atomic as a pair")
 def test_metadata_write_failure_preserves_previous_cache_pair(
     monkeypatch, isolated_environment, payload
 ):

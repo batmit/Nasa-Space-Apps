@@ -8,8 +8,15 @@ from ..models.embrapa import (
 )
 from ..models.recomendacao import (
     DadosAgricultor, FormaIrrigacao, JanelaRecomendada, Municipio,
-    OpcaoCultura, Orientacao, RecomendacaoResponse, ReferenciaTecnica,
+    OpcaoCultura, RecomendacaoResponse, ReferenciaTecnica,
 )
+
+from ..models.clima import ClimaError, ResumoClimatico
+from .manejo import gerar_orientacoes
+
+
+class FonteClima(Protocol):
+    def obter_resumo(self, latitude: float, longitude: float) -> ResumoClimatico: ...
 
 
 class FonteZoneamento(Protocol):
@@ -37,11 +44,12 @@ def _opcao(cultura: CulturaEmbrapa) -> OpcaoCultura:
 
 
 class RecomendacaoService:
-    def __init__(self, zoneamento: FonteZoneamento, referencias: FonteReferencias,
-                 localizador: LocalizadorMunicipio):
+    def __init__(self, zoneamento: FonteZoneamento | None, referencias: FonteReferencias | None,
+                 localizador: LocalizadorMunicipio, clima: FonteClima | None = None):
         self._zoneamento = zoneamento
         self._referencias = referencias
         self._localizador = localizador
+        self._clima = clima
 
     def recomendar(self, dados: DadosAgricultor) -> RecomendacaoResponse:
         municipio = self._localizador.resolver_municipio(dados.latitude, dados.longitude)
@@ -50,7 +58,6 @@ class RecomendacaoService:
             fontes=["OpenStreetMap / Nominatim", "IBGE"],
             avisos=[
                 "Município identificado por geocodificação reversa; confira o local, especialmente próximo a divisas.",
-                "A análise NASA ainda não está integrada a este fluxo.",
                 "Sem data de plantio, as janelas indicam períodos da safra informada, não autorização para plantar hoje.",
                 "O histórico resumido da área não informa espécies e datas; não é possível validar uma sequência de rotação.",
                 "O pH isolado não determina dose de calcário ou adubo; é necessária análise de solo completa e método de medição.",
@@ -69,6 +76,33 @@ class RecomendacaoService:
             resposta.pendencias.append(
                 "As restrições em texto foram registradas, mas sua compatibilidade com as opções exige avaliação técnica."
             )
+        if self._clima is not None:
+            try:
+                resposta.resumo_climatico = self._clima.obter_resumo(dados.latitude, dados.longitude)
+            except ClimaError as exc:
+                resposta.avisos.append(f"Análise climática indisponível: {exc}")
+            else:
+                resposta.analise_climatica_realizada = True
+                resposta.fontes.append("NASA POWER")
+                resposta.avisos.extend(resposta.resumo_climatico.avisos)
+        else:
+            resposta.avisos.append("Fonte climática não configurada para esta consulta.")
+        if self._zoneamento is not None:
+            try:
+                self._adicionar_zoneamento(dados, resposta)
+            except EmbrapaError as exc:
+                resposta.pendencias.append(f"Zoneamento Embrapa indisponível: {exc}")
+        else:
+            resposta.pendencias.append("O zoneamento Agritec não está configurado no servidor; a janela de plantio ainda precisa ser validada.")
+        if not resposta.janelas:
+            resposta.pendencias.append("A época de plantio da cultura desejada não foi validada nesta consulta.")
+        self._adicionar_referencias(dados, resposta)
+        resposta.orientacoes = gerar_orientacoes(dados, resposta)
+        if resposta.janelas or resposta.analise_climatica_realizada:
+            resposta.status = "orientacao_condicional"
+        return resposta
+
+    def _adicionar_zoneamento(self, dados: DadosAgricultor, resposta: RecomendacaoResponse) -> None:
         desejada = _normalizar(dados.cultura_desejada)
         modalidade = "SEQUEIRO" if dados.forma_irrigacao == FormaIrrigacao.SEM_IRRIGACAO else "IRRIGADO"
         culturas = self._zoneamento.listar_culturas()
@@ -87,13 +121,12 @@ class RecomendacaoService:
                 resposta.pendencias.append("Há mais de uma cultura compatível; informe o nome completo de uma das opções.")
             else:
                 resposta.pendencias.append("Cultura e modalidade de cultivo não identificadas no catálogo com zoneamento disponível.")
-            self._adicionar_referencias(dados, resposta)
-            return resposta
+            return
 
         cultura = candidatas[0]
         resposta.cultura = _opcao(cultura)
         resultado = self._zoneamento.consultar_zoneamento(ConsultaZoneamento(
-            codigo_ibge=municipio.codigo_ibge, id_cultura=cultura.id,
+            codigo_ibge=resposta.municipio.codigo_ibge, id_cultura=cultura.id,
         ))
         solo = dados.tipo_solo.value.upper().replace("_", " ")
         for janela in resultado.janelas:
@@ -108,21 +141,15 @@ class RecomendacaoService:
                 safra_inicio=janela.safra_inicio, safra_fim=janela.safra_fim,
                 risco=janela.risco, portaria=janela.portaria,
             ))
-        if resposta.janelas:
-            resposta.status = "orientacao_condicional"
-            resposta.orientacoes.append(Orientacao(
-                tema="epoca_plantio", fonte=resultado.fonte,
-                texto="Considere as janelas ZARC listadas somente para o solo, ciclo, modalidade e safra correspondentes. Verifique também as condições atuais antes do plantio.",
-            ))
-        else:
+        if not resposta.janelas:
             resposta.pendencias.append(
                 "Não foram encontradas janelas para a combinação consultada. Isso não comprova inaptidão da cultura. Não convertemos textura do solo automaticamente em classes AD1–AD6."
             )
 
-        self._adicionar_referencias(dados, resposta)
-        return resposta
-
     def _adicionar_referencias(self, dados: DadosAgricultor, resposta: RecomendacaoResponse) -> None:
+        if self._referencias is None:
+            resposta.avisos.append("RespondeAgro não configurada; referências de busca indisponíveis.")
+            return
         # Contexto orienta a busca editorial, sem ser convertido em diagnóstico.
         termos = [
             dados.cultura_desejada, "solo", "manejo", "irrigação", "rotação de culturas",

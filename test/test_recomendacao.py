@@ -1,4 +1,4 @@
-"""Verificações sem rede: python -m unittest discover -s tests -v.
+"""Verificações sem rede: python -m unittest discover -s test -v.
 
 Os testes HTTP requerem httpx no ambiente de desenvolvimento.
 """
@@ -126,7 +126,10 @@ class RecomendacaoTests(unittest.TestCase):
 
     def test_falhas_externas_e_localizacao(self):
         self.zoneamento.listar_culturas.side_effect = EmbrapaError("Falha externa", 401)
-        self.assertEqual(self.client.post("/api/v1/recomendar", json=ENTRADA).status_code, 502)
+        response = self.client.post("/api/v1/recomendar", json=ENTRADA)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "dados_insuficientes")
+        self.assertTrue(any("indisponível" in item for item in response.json()["pendencias"]))
         self.localizador.resolver_municipio.side_effect = LocalizacaoError("Fora do Brasil", entrada_invalida=True)
         self.assertEqual(self.client.post("/api/v1/recomendar", json=ENTRADA).status_code, 422)
 

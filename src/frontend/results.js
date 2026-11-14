@@ -19,10 +19,10 @@ export function renderResults(data, onChooseCulture) {
   }
   document.getElementById("resRegionBadge").textContent = `${data.municipio.nome}, ${data.municipio.uf}`;
   document.getElementById("diagTitle").textContent = data.status === "orientacao_condicional"
-    ? "Janelas encontradas — confira as condições" : "Precisamos conferir algumas informações";
+    ? "Orientações disponíveis — confira as condições" : "Precisamos conferir algumas informações";
   document.getElementById("diagText").textContent = data.cultura
     ? `Cultura consultada: ${data.cultura.nome}. As janelas não substituem a avaliação da propriedade.`
-    : "A cultura não foi identificada de forma única para as condições informadas.";
+    : "A janela da cultura desejada não foi validada. Confira as orientações disponíveis e as pendências.";
 
   const options = document.getElementById("cultureOptions");
   options.replaceChildren(...data.opcoes_cultura.map((option) => {
@@ -46,6 +46,15 @@ export function renderResults(data, onChooseCulture) {
   recommendations.replaceChildren(...data.orientacoes.map((item) => {
     const section = element("div", "");
     section.append(element("p", item.texto), element("p", `Fonte: ${item.fonte}`, "text-sm text-slate-500"));
+    for (const evidence of item.evidencias || []) section.append(element("p", evidence, "text-sm text-slate-600 mt-1"));
+    try {
+      const url = new URL(item.url_fonte);
+      if (url.protocol === "https:") {
+        const link = element("a", "Fundamentação da orientação", "reference-link");
+        link.href = url.href; link.target = "_blank"; link.rel = "noopener noreferrer";
+        section.append(link);
+      }
+    } catch { /* Fonte sem link público. */ }
     return section;
   }));
   if (!data.orientacoes.length) recommendations.append(element("p", "Não há orientação conclusiva para esta consulta."));
@@ -70,7 +79,47 @@ export function renderResults(data, onChooseCulture) {
     return card;
   }));
   if (!data.referencias.length) references.append(element("p", "Nenhuma referência foi retornada nesta consulta."));
-  document.getElementById("nasaStatus").textContent = data.analise_climatica_realizada
-    ? "Esta resposta não contém uma série climática para exibição."
-    : "A análise climática ainda não está disponível neste fluxo. Nenhuma métrica climática foi estimada nesta consulta.";
+  renderClimate(data.resumo_climatico, data.analise_climatica_realizada);
+}
+
+export function renderClimate(climate, available) {
+  const metrics = document.getElementById("climateMetrics");
+  const monthly = document.getElementById("climateMonthly");
+  metrics.replaceChildren();
+  monthly.replaceChildren();
+  if (!available || !climate) {
+    document.getElementById("nasaStatus").textContent = "Análise climática indisponível nesta consulta. Nenhuma métrica foi inventada; confira os avisos.";
+    return;
+  }
+  document.getElementById("nasaStatus").textContent = `NASA POWER · ${climate.data_inicio} a ${climate.data_fim}. Histórico recente, não uma previsão.`;
+  const format = (value, unit) => typeof value === "number" && Number.isFinite(value)
+    ? `${value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} ${unit}` : "Dados insuficientes";
+  for (const [label, value] of [
+    ["Chuva média anual (anos completos)", format(climate.precipitacao_media_anual_mm, "mm/ano")],
+    ["Temperatura média", format(climate.temperatura_media_c, "°C")],
+    ["Umidade relativa do ar a 2 m", format(climate.umidade_relativa_ar_pct, "%")],
+    ["Radiação solar média", format(climate.radiacao_media_mj_m2_dia, "MJ/m²/dia")],
+    ["Maior sequência com chuva inferior a 1 mm/dia", format(climate.maior_sequencia_dias_sem_chuva, "dias")],
+  ]) {
+    const card = element("div", "", "result-card");
+    card.append(element("h4", label, "text-sm font-extrabold"), element("p", value, "window-period"));
+    metrics.append(card);
+  }
+  const table = element("table", "", "climate-table");
+  const head = element("thead", "");
+  const header = element("tr", "");
+  for (const label of ["Mês", "Chuva média (mm/mês)", "Temperatura média (°C)", "Anos com chuva completa"]) {
+    const th = element("th", label); th.scope = "col"; header.append(th);
+  }
+  head.append(header);
+  const body = element("tbody", "");
+  const names = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+  for (const month of climate.meses || []) {
+    const row = element("tr", "");
+    for (const value of [names[month.mes - 1] || month.mes, format(month.precipitacao_media_mm, ""),
+      format(month.temperatura_media_c, ""), month.anos_chuva_completos]) row.append(element("td", value));
+    body.append(row);
+  }
+  table.append(head, body);
+  monthly.append(table);
 }

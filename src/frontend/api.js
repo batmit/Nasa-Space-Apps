@@ -8,7 +8,7 @@ export class ApiError extends Error {
 
 export async function requestJson(path, options = {}) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 90000);
+  const timer = setTimeout(() => controller.abort(), 150000);
   try {
     const response = await fetch(path, { ...options, signal: controller.signal,
       headers: { Accept: "application/json", ...options.headers } });

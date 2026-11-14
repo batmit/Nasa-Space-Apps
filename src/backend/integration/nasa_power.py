@@ -60,6 +60,10 @@ def request_NASA_API(latitude: float, longitude: float, start: str, end: str, *,
     de execução. Erros de persistência são propagados como OSError.
     """
     latitude, longitude = float(latitude), float(longitude)
+    if not math.isfinite(latitude) or not -90 <= latitude <= 90:
+        raise ValueError("Latitude deve estar entre -90 e 90 e ser finita.")
+    if not math.isfinite(longitude) or not -180 <= longitude <= 180:
+        raise ValueError("Longitude deve estar entre -180 e 180 e ser finita.")
 
     for value in (start, end):
         if (
@@ -96,8 +100,11 @@ def request_NASA_API(latitude: float, longitude: float, start: str, end: str, *,
 
     if not force_refresh and response_path.is_file() and metadata_path.is_file():
         try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            if not isinstance(metadata, dict) or metadata.get("query_id") != query_hash or metadata.get("params") != params:
+                raise NasaPowerError("Metadados de cache incompatíveis com a consulta.")
             return _validate_response(json.loads(response_path.read_text(encoding="utf-8")))
-        except (json.JSONDecodeError, NasaPowerError):
+        except (ValueError, UnicodeError, NasaPowerError):
             # Uma coleta local inválida pode ser recuperada com uma nova consulta.
             pass
 
@@ -122,6 +129,24 @@ def request_NASA_API(latitude: float, longitude: float, start: str, end: str, *,
         "fetched_at": datetime.now(timezone.utc).isoformat(),
     }
     query_dir.mkdir(parents=True, exist_ok=True)
-    _write_json(response_path, payload)
-    _write_json(metadata_path, metadata)
+    # Se a atualização dos metadados falhar, não deixe a resposta antiga e nova
+    # associadas a metadados inconsistentes. Cada arquivo é substituído atomicamente.
+    anterior = None
+    if response_path.is_file():
+        try:
+            anterior = json.loads(response_path.read_text(encoding="utf-8"))
+        except (ValueError, UnicodeError):
+            pass
+    try:
+        _write_json(response_path, payload)
+        _write_json(metadata_path, metadata)
+    except OSError:
+        if anterior is not None:
+            try:
+                _write_json(response_path, anterior)
+            except (OSError, ValueError):
+                metadata_path.unlink(missing_ok=True)
+        else:
+            response_path.unlink(missing_ok=True)
+        raise
     return payload

@@ -396,8 +396,8 @@
       <div class="max-w-4xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         <div id="loadingIndicator" class="hidden result-panel text-center" role="status" aria-live="polite">
           <div class="w-12 h-12 border-4 border-emerald-700 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <h2 class="font-extrabold text-lg mt-4">Consultando as fontes da Embrapa...</h2>
-          <p>Buscando janelas de plantio e referências técnicas para sua área.</p>
+          <h2 class="font-extrabold text-lg mt-4">Consultando NASA POWER e Embrapa...</h2>
+          <p>Analisando o histórico climático, as janelas de plantio e as referências técnicas para sua área. A primeira consulta pode levar mais tempo.</p>
         </div>
         <div id="requestError" class="hidden result-panel" role="alert">
           <h2 class="font-extrabold text-lg">Não foi possível concluir a consulta</h2>
@@ -442,6 +442,8 @@
           <div class="result-panel" id="nasaPanel">
             <h3 class="font-extrabold text-lg">Dados climáticos</h3>
             <p id="nasaStatus" class="text-slate-600 mt-2">Análise climática indisponível nesta consulta.</p>
+            <div id="climateMetrics" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4"></div>
+            <div id="climateMonthly" class="mt-4 overflow-x-auto"></div>
           </div>
           <div class="result-panel text-sm">
             <h3 class="font-extrabold">Fontes consultadas</h3>

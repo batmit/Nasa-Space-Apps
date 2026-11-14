@@ -26,6 +26,9 @@ body {
 .secondary-button { color: #064e3b; background: #ecfdf5; border: 1px solid #6ee7b7; }
 .feedback-error { padding: 1rem; color: #9f1239; background: #fff1f2; border-radius: .75rem; }
 .reference-link { color: #047857; text-decoration: underline; display: inline-block; margin-top: .5rem; }
+.climate-table { border-collapse: collapse; width: 100%; font-size: .85rem; }
+.climate-table th, .climate-table td { border-bottom: 1px solid #e2e8f0; padding: .65rem; text-align: left; }
+.climate-table th { background: #f0fdf4; color: #064e3b; }
 button:disabled { opacity: .5; cursor: wait; }
 button:focus-visible, a:focus-visible { outline: 3px solid #0284c7; outline-offset: 3px; }
 #manualCoordsBox:not(.hidden) { display: grid; }
