@@ -254,3 +254,30 @@ Os testes JavaScript usam o runner nativo do Node, sem pacotes npm adicionais.
 - [Localidades IBGE](https://servicodados.ibge.gov.br/api/docs/localidades)
 - [NASA POWER — dados diários](https://power.larc.nasa.gov/docs/services/api/temporal/daily/)
 - [Embrapa — rotação e cobertura do solo](https://www.embrapa.br/web/agencia-de-informacao-tecnologica/cultivos/milho/producao/rotacao-de-culturas)
+
+### Orientação personalizada com Gemini (opcional)
+
+Instale `requirements.txt` e configure `GEMINI_API_KEY` no ambiente do servidor.
+O código não carrega arquivos `.env` automaticamente. Nunca coloque a chave no
+frontend ou no Git. `GEMINI_MODEL` permite substituir o modelo padrão
+`gemini-3.1-flash-lite`. Reinicie o servidor ao alterar essas variáveis.
+
+Após reunir as fontes, `RecomendacaoService` envia um snapshot JSON com todos
+os campos do formulário (cultura, solo, pH, histórico, irrigação, objetivo,
+restrições e localização), o resumo NASA com período/cobertura/avisos,
+referências Embrapa, janelas ZARC confirmadas e condicionais, diagnóstico,
+orientações existentes e pendências. Quando há classe ZARC, a descrição original
+do solo é preservada em `tipo_solo_informado`. O histórico NASA bruto continua
+no fluxo existente; a IA recebe os indicadores calculados, não a série diária.
+
+A resposta de `/api/v1/recomendar` inclui `explicacao_ia` (`resumo`, `actions`)
+e `status_ia`: `nao_configurado`, `disponivel` ou `indisponivel`. A interface atual
+continua mostrando as orientações existentes; a explicação da IA fica disponível
+no JSON da API. Cada ação cita IDs de `evidencias_contexto`; IDs desconhecidos
+invalidam a geração. Essa checagem não comprova a correção agronômica do texto.
+
+A integração usa cliente injetável, saída estruturada e timeout HTTP de 30 s,
+sem estado de conversa armazenado (`store=False`). Sem chave, não chama Gemini;
+em falhas de geração, preserva os resultados existentes e informa um aviso.
+A geração não altera a validação de restrições, cálculos climáticos ou filtros
+ZARC. Testes sem rede: `python -m pytest test/test_gemini_api.py`.

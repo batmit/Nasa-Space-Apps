@@ -145,3 +145,9 @@ test("janelas condicionais ficam separadas das confirmadas e são limpas ao repe
   renderZarc({ status_zarc: "falha_autenticacao", janelas: [], janelas_condicionais: [] });
   assert.match(nodes.get("zarcStatus").textContent, /recusado/);
 });
+
+test("payload preserva descrição do solo separada da classe ZARC", () => {
+  const payload = buildPayload(form({ ...input, tipo_solo: "AD1", tipo_solo_informado: "raso" }));
+  assert.equal(payload.tipo_solo, "AD1");
+  assert.equal(payload.tipo_solo_informado, "raso");
+});

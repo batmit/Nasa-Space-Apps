@@ -8,9 +8,33 @@ from ..models.recomendacao import (
     DadosAgricultor, Municipio, RecomendacaoResponse, ReferenciaTecnica,
 )
 
+from ..models.gemini import OrientacaoIAError, StructuredGeminiOutput
 from ..models.clima import ClimaError, ResumoClimatico
 from .manejo import gerar_orientacoes
 from .zoneamento import FonteZoneamento, adicionar_zoneamento
+
+
+class FonteOrientacaoIA(Protocol):
+    def gerar(self, contexto: dict) -> StructuredGeminiOutput: ...
+
+
+def montar_contexto_ia(resposta: RecomendacaoResponse) -> dict:
+    """Snapshot JSON das fontes já consultadas; não faz chamadas externas."""
+    contexto = resposta.model_dump(
+        mode="json", exclude={"explicacao_ia", "status_ia", "janelas_confirmadas"},
+    )
+    # JSON pointers evitam duplicar os dados e consumir tokens desnecessários.
+    evidencias = {"usuario": "/dados_informados"}
+    if resposta.resumo_climatico is not None:
+        evidencias["nasa:resumo"] = "/resumo_climatico"
+    for i in range(len(resposta.janelas)):
+        evidencias[f"zarc:janela:{i}"] = f"/janelas/{i}"
+    for i in range(len(resposta.janelas_condicionais)):
+        evidencias[f"zarc:condicional:{i}"] = f"/janelas_condicionais/{i}"
+    for i in range(len(resposta.referencias)):
+        evidencias[f"embrapa:referencia:{i}"] = f"/referencias/{i}"
+    contexto["evidencias_contexto"] = evidencias
+    return contexto
 
 
 class FonteClima(Protocol):
@@ -34,11 +58,13 @@ def _normalizar(texto: str) -> str:
 
 class RecomendacaoService:
     def __init__(self, zoneamento: FonteZoneamento | None, referencias: FonteReferencias | None,
-                 localizador: LocalizadorMunicipio, clima: FonteClima | None = None):
+                 localizador: LocalizadorMunicipio, clima: FonteClima | None = None,
+                 orientacao_ia: FonteOrientacaoIA | None = None):
         self._zoneamento = zoneamento
         self._referencias = referencias
         self._localizador = localizador
         self._clima = clima
+        self._orientacao_ia = orientacao_ia
 
     def recomendar(self, dados: DadosAgricultor) -> RecomendacaoResponse:
         municipio = self._localizador.resolver_municipio(dados.latitude, dados.longitude)
@@ -83,6 +109,14 @@ class RecomendacaoService:
         resposta.orientacoes = gerar_orientacoes(dados, resposta)
         if resposta.janelas or resposta.janelas_condicionais or resposta.analise_climatica_realizada:
             resposta.status = "orientacao_condicional"
+        if self._orientacao_ia is not None:
+            try:
+                resposta.explicacao_ia = self._orientacao_ia.gerar(montar_contexto_ia(resposta))
+            except OrientacaoIAError:
+                resposta.status_ia = "indisponivel"
+                resposta.avisos.append("Orientação por IA indisponível; os resultados das fontes foram preservados.")
+            else:
+                resposta.status_ia = "disponivel"
         return resposta
 
     def _adicionar_referencias(self, dados: DadosAgricultor, resposta: RecomendacaoResponse) -> None:

@@ -157,7 +157,10 @@ async function submitForm(event) {
       formData.set("cultura_desejada", selected.dataset.culturaNome);
     }
     const classe = byId("zarcSoilClass").value;
-    if (classe) formData.set("tipo_solo", classe);
+    if (classe) {
+      formData.set("tipo_solo_informado", formData.get("tipo_solo"));
+      formData.set("tipo_solo", classe);
+    }
     payload = buildPayload(formData);
   }
   catch (error) { goToScreen(2); feedback("formFeedback", error.message); return; }
