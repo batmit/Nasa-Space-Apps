@@ -56,7 +56,7 @@ class Element {
   constructor(tag) { this.tag = tag; this.children = []; this.textContent = ""; this.classList = { toggle: (name, enabled) => { this[name] = enabled; } }; }
   append(...children) { this.children.push(...children); }
   replaceChildren(...children) { this.children = children; }
-  addEventListener() {}
+  addEventListener(name, callback) { this[name] = callback; }
   set innerHTML(_) { throw new Error("Conteúdo externo não deve ser renderizado como HTML"); }
 }
 
@@ -76,11 +76,54 @@ test("resultado renderiza fontes reais como texto e limpa dados da consulta ante
     referencias: [{ pergunta: "<img src=x onerror=alert(1)>", resposta: "Texto técnico", livro: "Milho", url_publicacao: "javascript:alert(1)" }],
   };
   renderResults(data, () => {});
+  assert.equal(nodes.get("pendingDetails").open, true);
+  assert.equal(nodes.get("warningDetails").open, false);
+  assert.equal(nodes.get("pendingCount").textContent, "1");
   assert.equal(nodes.get("technicalReferences").children[0].children[0].textContent, "<img src=x onerror=alert(1)>");
   assert.equal(nodes.get("technicalReferences").children[0].children.filter((node) => node.tag === "a").length, 0);
   renderResults({ ...data, referencias: [] }, () => {});
   assert.equal(nodes.get("technicalReferences").children[0].tag, "p");
   assert.throws(() => renderResults({}, () => {}), /formato/);
+  renderResults({ ...data, pendencias: [], orientacoes: [{ tema: "conservacao_agua", texto: "Manter cobertura.",
+    fonte: "Embrapa", evidencias: ["Dado preservado"], url_fonte: "https://www.embrapa.br/" }] }, () => {});
+  const guidance = nodes.get("recommendations").children[0];
+  assert.equal(guidance.tag, "article");
+  assert.equal(guidance.children[0].textContent, "Conservar água");
+  assert.equal(guidance.children[1].textContent, "Manter cobertura.");
+  assert.equal(guidance.children[2].tag, "details");
+  assert.ok(guidance.children[2].children.some((node) => node.textContent === "Dado preservado"));
+  assert.equal(nodes.get("pendingDetails").open, false);
+  assert.equal(nodes.get("pendingCount").textContent, "0");
+});
+
+test("ambiguidade oferece escolha junto ao ZARC e limpa opções após resolver", (context) => {
+  const nodes = new Map();
+  globalThis.document = {
+    createElement: (tag) => new Element(tag),
+    getElementById: (id) => {
+      if (!nodes.has(id)) nodes.set(id, new Element("div"));
+      return nodes.get(id);
+    },
+  };
+  context.after(() => { delete globalThis.document; });
+  const option = { id: 57, nome: "MILHO 2ª SAFRA SEQUEIRO", cultivo: "SEQUEIRO" };
+  const data = {
+    status: "dados_insuficientes", status_zarc: "cultura_ambigua",
+    municipio: { nome: "Ouro Preto", uf: "MG" }, dados_informados: input,
+    janelas: [], orientacoes: [], pendencias: [], avisos: [], fontes: [], referencias: [],
+    opcoes_cultura: [option],
+  };
+  let chosen;
+  renderResults(data, (value) => { chosen = value; });
+  assert.equal(nodes.get("diagTitle").textContent, "Escolha a opção de cultura");
+  assert.equal(nodes.get("confirmedWindowsSection").hidden, true);
+  assert.equal(nodes.get("cultureSelection").hidden, false);
+  assert.match(nodes.get("plantingWindows").children[0].textContent, /Aguardando sua escolha/);
+  nodes.get("cultureOptions").children[0].click();
+  assert.equal(chosen, option);
+  renderResults({ ...data, status_zarc: "sem_dados", opcoes_cultura: [] }, () => {});
+  assert.equal(nodes.get("cultureSelection").hidden, true);
+  assert.equal(nodes.get("cultureOptions").children.length, 0);
 });
 
 test("interface não contém simulador nem uma rota paralela de recomendação", () => {
@@ -136,12 +179,48 @@ test("janelas condicionais ficam separadas das confirmadas e são limpas ao repe
   assert.equal(nodes.get("plantingWindows").children[0].tag, "p");
   assert.equal(nodes.get("conditionalWindows").children.length, 1);
   assert.equal(nodes.get("conditionalWindowsSection").hidden, false);
+  assert.equal(nodes.get("confirmedWindowsSection").hidden, true);
   assert.equal(nodes.get("btnReviewSoil").onclick, review);
   assert.match(nodes.get("zarcStatus").textContent, /pendente/);
   renderZarc({ status_zarc: "disponivel", janelas_confirmadas: [window], janelas_condicionais: [] });
   assert.equal(nodes.get("plantingWindows").children[0].tag, "article");
+  assert.equal(nodes.get("confirmedWindowsSection").hidden, false);
   assert.equal(nodes.get("conditionalWindows").children.length, 0);
   assert.equal(nodes.get("conditionalWindowsSection").hidden, true);
   renderZarc({ status_zarc: "falha_autenticacao", janelas: [], janelas_condicionais: [] });
+  assert.match(nodes.get("zarcStatus").textContent, /recusado/);
+  assert.equal(nodes.get("confirmedWindowsSection").hidden, true);
+});
+
+test("terceira tela mantém IDs únicos e controles essenciais fora de blocos recolhidos", () => {
+  const html = readFileSync(new URL("../src/frontend/index.html", import.meta.url), "utf8");
+  const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]);
+  assert.equal(ids.length, new Set(ids).size, "IDs duplicados podem deixar dados invisíveis ou desatualizados");
+  const third = html.slice(html.indexOf('<section id="screen-3"'));
+  assert.match(third, /Quando plantar\?/);
+  assert.match(third, /Como cuidar da área\?/);
+  assert.match(third, /<details[^>]*id="nasaPanel"/);
+  assert.doesNotMatch(third.match(/<div id="cultureSelection"[\s\S]*?<\/div>/)[0], /<details/);
+});
+
+test("resumo diferencia compatibilidade de confirmação agronômica e mantém falhas explícitas", (context) => {
+  const nodes = new Map();
+  globalThis.document = {
+    createElement: (tag) => new Element(tag),
+    getElementById: (id) => {
+      if (!nodes.has(id)) nodes.set(id, new Element("div"));
+      return nodes.get(id);
+    },
+  };
+  context.after(() => { delete globalThis.document; });
+  const data = { status: "orientacao_condicional", dados_informados: input,
+    municipio: { nome: "Ouro Preto", uf: "MG" }, janelas: [], orientacoes: [],
+    pendencias: [], avisos: [], fontes: [], referencias: [], opcoes_cultura: [] };
+  renderResults({ ...data, status_zarc: "classe_solo_pendente" }, () => {});
+  assert.match(nodes.get("diagTitle").textContent, /Falta confirmar/);
+  renderResults({ ...data, status_zarc: "disponivel", janelas: [{ ciclo: "I", solo: "AD3", risco: 20 }] }, () => {});
+  assert.match(nodes.get("diagTitle").textContent, /compatíveis/);
+  renderResults({ ...data, status_zarc: "falha_autenticacao" }, () => {});
+  assert.match(nodes.get("diagTitle").textContent, /ainda precisa ser validado/);
   assert.match(nodes.get("zarcStatus").textContent, /recusado/);
 });

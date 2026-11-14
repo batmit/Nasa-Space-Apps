@@ -1,5 +1,5 @@
-import { buildPayload, recomendar, buscarLocalizacao, resolverLocalizacao } from "./api.js";
-import { renderResults } from "./results.js";
+import { buildPayload, recomendar, buscarLocalizacao, resolverLocalizacao } from "./api.js?v=20261114-results-4";
+import { renderResults } from "./results.js?v=20261114-results-4";
 
 const state = {
   lat: -20.3856, lon: -43.5035, regionName: "Ouro Preto, MG", map: null, marker: null,
@@ -140,8 +140,7 @@ function chooseCulture(option) {
   }
   select.value = entry.value;
   select.dispatchEvent(new Event("change"));
-  goToScreen(2);
-  select.focus();
+  submitForm();
 }
 
 async function submitForm(event) {

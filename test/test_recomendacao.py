@@ -144,6 +144,16 @@ class RecomendacaoTests(unittest.TestCase):
         self.assertIn("/api/v1/recomendar", self.client.get("/api.js").text)
         self.assertEqual(self.client.get("/docs").status_code, 200)
 
+    def test_interface_revalida_arquivos_e_respostas_condicionais(self):
+        for path in ("/", "/app.js", "/api.js", "/results.js", "/styles.css"):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.headers["cache-control"], "no-cache")
+                conditional = self.client.get(path, headers={"If-None-Match": response.headers["etag"]})
+                self.assertEqual(conditional.status_code, 304)
+                self.assertEqual(conditional.headers["cache-control"], "no-cache")
+
     def test_localizacao_independe_de_token_embrapa(self):
         self.localizador.buscar_localizacao.return_value = LocalizacaoSelecionada(
             regiao_nome="Ouro Preto, MG", latitude=-20.3856, longitude=-43.5035,

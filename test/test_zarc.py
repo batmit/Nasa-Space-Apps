@@ -171,3 +171,80 @@ def test_gzip_corrompido_tem_diagnostico_de_resposta_invalida():
         with pytest.raises(EmbrapaError) as result:
             EmbrapaClient("teste").listar_culturas_municipio(3146107)
     assert result.value.categoria == "resposta_invalida"
+
+
+def test_nome_generico_nao_oculta_outra_safra_do_catalogo():
+    result, source = executar(culturas=[cultura(1), cultura(2, "MILHO SEGUNDA SAFRA SEQUEIRO")])
+    assert result.status_zarc == "cultura_ambigua"
+    assert [c.id for c in result.opcoes_cultura] == [1, 2]
+    source.consultar_zoneamento.assert_not_called()
+
+
+@pytest.mark.parametrize("informada", [f"AD{i}" for i in range(1, 7)])
+@pytest.mark.parametrize("retornada", [f"AD{i}" for i in range(1, 7)])
+def test_matriz_classes_ad_nao_inventa_equivalencias(informada, retornada):
+    result, _ = executar(dados(tipo_solo=informada), janelas=[janela(solo=retornada)])
+    assert len(result.janelas_confirmadas) == int(informada == retornada)
+    assert not result.janelas_condicionais
+    assert result.diagnostico_zarc.descartadas_solo == int(informada != retornada)
+
+
+@pytest.mark.parametrize("textura", ["arenoso", "argiloso", "textura_media", "raso"])
+@pytest.mark.parametrize("classe", [f"AD{i}" for i in range(1, 7)])
+def test_textura_nunca_confirma_classe_ad(textura, classe):
+    result, _ = executar(dados(tipo_solo=textura), janelas=[janela(solo=classe)])
+    assert result.status_zarc == "classe_solo_pendente"
+    assert not result.janelas_confirmadas
+    assert len(result.janelas_condicionais) == 1
+
+
+def test_cultura_sem_zoneamento_nao_e_consultada():
+    opcao = cultura()
+    opcao.possui_zoneamento = False
+    result, source = executar(culturas=[opcao])
+    assert result.status_zarc == "cultura_nao_encontrada"
+    source.consultar_zoneamento.assert_not_called()
+
+
+def test_erro_na_segunda_etapa_nao_produz_janelas():
+    entrada = dados(tipo_solo="AD3")
+    result = RecomendacaoResponse(status="dados_insuficientes", dados_informados=entrada,
+        municipio=Municipio(codigo_ibge=3146107, nome="Ouro Preto", uf="MG"))
+    fonte = Mock()
+    fonte.listar_culturas_municipio.return_value = [cultura()]
+    fonte.consultar_zoneamento.side_effect = EmbrapaError("negado", 401)
+    adicionar_zoneamento(entrada, result, fonte)
+    assert result.status_zarc == "falha_autenticacao"
+    assert result.diagnostico_zarc.etapa == "consulta_zoneamento"
+    assert not result.janelas_confirmadas and not result.janelas_condicionais
+
+
+def test_transporte_e_saida_preservam_evidencia_recebida_sem_recalcular():
+    # Dados sintéticos de contrato: este teste não comprova cobertura real em Ouro Preto.
+    original = janela()
+    payload = {"data": [original.model_dump(by_alias=True)]}
+    response = io.BytesIO(json.dumps(payload).encode())
+    response.headers = {}
+    with patch("src.backend.integration.embrapa.urlopen", return_value=response) as request:
+        returned = EmbrapaClient("segredo-de-teste").consultar_zoneamento(
+            ConsultaZoneamento(codigo_ibge=3146107, id_cultura=1))
+    from urllib.parse import parse_qs, urlsplit
+    url = urlsplit(request.call_args.args[0].full_url)
+    assert url.path == "/agritec/v2/zoneamento"
+    assert parse_qs(url.query) == {"codigoIBGE": ["3146107"], "idCultura": ["1"], "risco": ["20"]}
+    assert "segredo-de-teste" not in url.query
+    result, _ = executar(dados(tipo_solo="AD3"), janelas=returned.janelas)
+    emitted = result.janelas_confirmadas[0]
+    for field in ("solo", "ciclo", "dia_inicio", "mes_inicio", "dia_fim", "mes_fim",
+                  "safra_inicio", "safra_fim", "risco", "portaria"):
+        assert getattr(emitted, field) == getattr(original, field)
+
+
+@pytest.mark.parametrize("payload", [{}, {"data": None}, {"data": [{}]}, {"data": [{"risco": 10}]}])
+def test_zoneamento_incompativel_nao_e_confundido_com_lista_vazia(payload):
+    response = io.BytesIO(json.dumps(payload).encode())
+    response.headers = {}
+    with patch("src.backend.integration.embrapa.urlopen", return_value=response):
+        with pytest.raises(EmbrapaError) as error:
+            EmbrapaClient("teste").consultar_zoneamento(ConsultaZoneamento(codigo_ibge=3146107, id_cultura=1))
+    assert error.value.categoria == "resposta_invalida"
