@@ -4,3 +4,6 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 src/backend/data/raw/nasa_power/
+node_modules/
+test-results/
+playwright-report/

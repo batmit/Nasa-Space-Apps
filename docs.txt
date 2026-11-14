@@ -4,3 +4,6 @@
 
 Reduzir riscos para pequenos e médios agricultores.
 Facilitar/democratizar acesso. Pessoas leigas. Quanto mais opções de acesso melhor (vulnerabilidade). Prefeituras.
+
+Machine Learning:
+    Sistema de recomendação. Produtor nao saber o que pode plantar. Banco de dados de garfos? (Ideia)

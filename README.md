@@ -188,16 +188,36 @@ fontes sem acessar a rede. Não há consultas externas ao importar a API.
 
 ## Verificação
 
-Com as dependências de `requirements.txt` instaladas:
+Os testes ficam junto da aplicação que verificam:
+
+- `src/backend/tests/`: pytest para NASA POWER/cache, resumo climático, regras de recomendação, adaptadores e contratos HTTP.
+- `src/frontend/tests/frontend.test.mjs`: testes unitários do contrato HTTP e da apresentação dos resultados com o runner nativo do Node.
+- `src/frontend/tests/wizard.spec.js`: testes de comportamento no Chromium com Playwright (navegação, localização, validação, envio, carregamento, erros, repetição e exportação).
+
+Execute a partir da raiz do repositório (Python 3.12 e Node 22 ou superior):
 
 ```bash
-python -m pip install pytest httpx
-python -m pytest test -q
-node --test test/frontend.test.mjs
+python -m pip install -r requirements-dev.txt
+python -m pytest -q
+
+npm --prefix src/frontend ci
+cd src/frontend
+npx playwright install chromium
+npm test
 ```
 
-Os testes usam fontes simuladas e não consomem requisições das APIs.
-Os testes JavaScript usam o runner nativo do Node, sem pacotes npm adicionais.
+Para executar somente uma camada do frontend:
+
+```bash
+npm --prefix src/frontend run test:unit
+npm --prefix src/frontend run test:browser
+```
+
+Os dois últimos comandos devem ser executados a partir da raiz. Em Linux, se faltarem bibliotecas do navegador, use `npx playwright install --with-deps chromium` dentro de `src/frontend`.
+
+Os testes usam fontes simuladas e não exigem tokens nem consultas às APIs externas. O Playwright inicia e encerra um servidor estático local na porta 8765; as respostas da API e recursos externos são interceptados. A indisponibilidade do mapa é exercitada pelo fluxo alternativo de coordenadas; os testes não verificam Leaflet, tiles, estilos Tailwind ou os serviços externos. Não são testes integrados de ponta a ponta entre frontend e backend.
+
+A CI executa backend e frontend em jobs independentes nos pushes para `back-end` e nos pull requests destinados a `main` ou `back-end`. Falhas nos testes falham o job. Traces de falhas do Playwright são disponibilizados como artefato `frontend-test-results`.
 
 ## Referências das integrações
 

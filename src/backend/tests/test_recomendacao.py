@@ -1,4 +1,4 @@
-"""Verificações sem rede: python -m unittest discover -s test -v.
+"""Verificações sem rede: python -m pytest src/backend/tests -q.
 
 Os testes HTTP requerem httpx no ambiente de desenvolvimento.
 """
