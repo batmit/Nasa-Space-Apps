@@ -57,6 +57,7 @@ provedor contratado ou hospedagem própria conforme a política do serviço.
 - `src/backend/integration/nasa_power.py`: coleta NASA POWER e cache dos dados brutos.
 - `src/backend/services/clima.py`: qualidade dos dados e resumo dos últimos três anos completos.
 - `src/backend/services/manejo.py`: regras de orientação com evidências e referências.
+- `src/backend/services/zoneamento.py`: catálogo municipal, seleção e classificação das janelas ZARC.
 
 Conforme as funcionalidades crescerem, as rotas poderão ser separadas em
 arquivos por módulo, mantendo a inicialização em `main.py`.
@@ -107,7 +108,9 @@ divisas; a resposta expõe o município identificado para conferência.
 ## Contrato e comportamento
 
 Não são aceitos os campos antigos `prioridade`, `historico` nem `risco`.
-O contrato atual recebe `historico_area` e `objetivo`.
+O contrato atual recebe `historico_area` e `objetivo`. `id_cultura` é opcional:
+a interface o acrescenta após a escolha explícita de uma opção do catálogo.
+O servidor confere se esse ID corresponde ao município, cultura e modalidade.
 O risco ZARC é fixado internamente em 20%.
 
 - `regiao_nome`: nome de região informado pelo frontend (até 200 caracteres).
@@ -122,8 +125,10 @@ O risco ZARC é fixado internamente em 20%.
 - `tipo_solo`: `arenoso`, `argiloso`, `textura_media`, `raso`, ou `AD1` a `AD6`.
   Textura não é convertida automaticamente em classe de disponibilidade de água.
   A opção de terra mista da interface envia `textura_media`. `raso` descreve
-  profundidade, sem informar textura ou classe AD; normalmente gera pendência
-  por ausência de uma janela diretamente correspondente.
+  profundidade, sem informar textura ou classe AD; janelas de classes
+  conhecidas ficam condicionadas à confirmação da classificação do solo.
+  O formulário oferece uma opção avançada para informar AD1–AD6 somente
+  quando a classe já for conhecida por avaliação técnica.
 - `forma_irrigacao`: `sem_irrigacao`, `gotejamento`, `aspersao`, `pivo_central`,
   `microaspersao`, `superficie` ou `outra`.
 - `ph`: número entre 0 e 14; preservado como contexto. Sem método de medição e
@@ -134,21 +139,63 @@ O risco ZARC é fixado internamente em 20%.
 A resposta contém `status`, município, cultura selecionada, janelas com solo,
 ciclo, safra e portaria, orientações, referências, pendências e avisos.
 `orientacao_condicional` indica que existe histórico climático utilizável ou
-janelas ZARC compatíveis para fundamentar orientações. Não significa aptidão da
+janelas ZARC compatíveis ou condicionais para fundamentar orientações. Não significa aptidão da
 cultura ou que todas as condições da propriedade foram validadas.
-`dados_insuficientes` indica ausência das duas bases. Pendências descrevem
+`dados_insuficientes` indica ausência dessas bases. Pendências descrevem
 explicitamente o que não foi validado, mesmo quando há orientações disponíveis.
-Nomes ambíguos retornam opções para selecionar pelo nome completo, sem escolher
-um ID arbitrário. Catálogos sem correspondência não comprovam inaptidão.
+Nomes ambíguos retornam opções para escolha explícita, sem selecionar um ID
+arbitrário. Catálogos sem correspondência não comprovam inaptidão.
 
 Sem data de plantio, apresentamos as janelas e os anos de safra retornados,
 sem afirmar que se pode plantar hoje. O histórico resumido da área não informa
 espécies e datas; não validamos uma sequência de rotação. A RespondeAgro retorna referências de publicações, não prescrições
 personalizadas; textos são devolvidos sem marcação HTML.
 
+## Consulta e diagnóstico ZARC
+
+O catálogo é consultado por município em
+`GET /municipios/{codigoIBGE}/culturas`. O catálogo global continua disponível
+no cliente para outros usos, mas não é usado para selecionar a cultura neste
+fluxo. Nomes completos identificados de forma única são aceitos. Correspondências
+mais amplas, como `milho` para safras diferentes, são oferecidas como opções,
+mesmo quando existe apenas uma opção com nome mais específico. O frontend
+preserva o ID da opção selecionada; IDs de outro município, modalidade ou
+cultura são recusados na seleção. Nenhum ID é escolhido arbitrariamente.
+
+O contrato de resposta acrescenta:
+
+- `status_zarc` e `mensagem_zarc`: resultado específico da consulta, independente
+  do sucesso da NASA ou do status geral de recomendação.
+- `janelas_confirmadas`: períodos que correspondem exatamente ao solo e à
+  modalidade informados, sempre no risco de 20%. A palavra "confirmadas" se
+  refere aos filtros; não constitui validação completa da propriedade.
+- `janelas_condicionais`: períodos que dependem da confirmação de uma outra
+  classificação de solo. Cada item inclui `condicao` e mantém solo, ciclo,
+  safra, risco e portaria originais.
+- `diagnostico_zarc`: etapa, município, cultura selecionada, risco consultado,
+  quantidade recebida, descartes por filtro e solos disponíveis.
+
+`janelas` é mantido como alias de `janelas_confirmadas`, sem duplicar o estado
+interno. Janelas condicionais não são misturadas às confirmadas nem usadas para
+recomendar uma época de plantio validada. Textura não é convertida em AD, classes
+AD diferentes não são tratadas como equivalentes e o risco não é aumentado
+para conseguir resultados.
+
+Estados de resultado: `disponivel`, `parcial`, `classe_solo_pendente`,
+`cultura_ambigua`, `cultura_nao_encontrada`, `cultura_invalida`,
+`modalidade_indisponivel`, `sem_dados`, `sem_dados_compativeis`,
+`nao_configurado`, `falha_autenticacao`, `limite_consultas`, `falha_conexao`,
+`resposta_invalida` e `falha_api`.
+
+O transporte AgroAPI aceita JSON simples ou gzip. Erros de autenticação, limite,
+conexão e formato são preservados no diagnóstico, sem virar uma lista vazia.
+A interface mostra os dois grupos, permite revisar o solo e exibe contagens
+para distinguir ausência de dados de janelas descartadas pelos filtros.
+
 ## NASA e recomendações
 
-O contrato de entrada do frontend continua com dez campos. O backend escolhe
+A consulta inicial do frontend continua com dez campos; a escolha de uma
+opção específica pode acrescentar `id_cultura`. O backend escolhe
 os três anos completos anteriores ao ano atual (em 2026: 2023–2025) e chama a
 função existente `request_NASA_API`. O cache em
 `src/backend/data/raw/nasa_power/` é reutilizado, fica fora do Git e mantém

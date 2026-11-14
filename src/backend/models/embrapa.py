@@ -63,8 +63,9 @@ class ResultadoZoneamento(BaseModel):
 class EmbrapaError(RuntimeError):
     """Falha externa, separada dos erros de validação da entrada local."""
 
-    def __init__(self, mensagem: str, status_code: int | None = None):
+    def __init__(self, mensagem: str, status_code: int | None = None, *, categoria: str = "api"):
         super().__init__(mensagem)
         self.status_code = status_code
+        self.categoria = categoria
 
 

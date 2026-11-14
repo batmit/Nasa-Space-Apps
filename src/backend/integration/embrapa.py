@@ -22,10 +22,12 @@ O risco de consulta é fixado internamente em 20%; o agricultor não o informa.
 Contrato: https://www.agroapi.cnptia.embrapa.br/store/api-docs/agroapi/Agritec/v2
 """
 
+import gzip
 import json
 import math
 import os
 import re
+import zlib
 from html import unescape
 from html.parser import HTMLParser
 from typing import Generic, TypeVar
@@ -81,11 +83,18 @@ class _AgroAPIClient:
             headers={
                 "Accept": "application/json", "Authorization": f"Bearer {self._token}",
                 "Content-Type": "application/json",
+                "Accept-Encoding": "gzip",
             },
         )
         try:
             with urlopen(request, timeout=self._timeout) as response:
-                return json.load(response)
+                body = response.read()
+                encoding = getattr(response, "headers", {}).get("Content-Encoding", "").strip().lower()
+                if encoding == "gzip":
+                    body = gzip.decompress(body)
+                elif encoding not in ("", "identity"):
+                    raise EmbrapaError("A Embrapa retornou compactação não suportada.", categoria="resposta_invalida")
+                return json.loads(body)
         except HTTPError as exc:
             status = exc.code
             exc.close()
@@ -96,10 +105,10 @@ class _AgroAPIClient:
             else:
                 mensagem = f"A API da Embrapa retornou HTTP {status}."
             raise EmbrapaError(mensagem, status) from None
+        except (ValueError, gzip.BadGzipFile, EOFError, zlib.error):
+            raise EmbrapaError("A API da Embrapa retornou JSON ou gzip inválido.", categoria="resposta_invalida") from None
         except (URLError, TimeoutError, OSError):
-            raise EmbrapaError("Não foi possível conectar à API da Embrapa.") from None
-        except (ValueError, UnicodeError):
-            raise EmbrapaError("A API da Embrapa retornou JSON inválido.") from None
+            raise EmbrapaError("Não foi possível conectar à API da Embrapa.", categoria="conexao") from None
 
 
 class EmbrapaClient(_AgroAPIClient):
@@ -114,7 +123,17 @@ class EmbrapaClient(_AgroAPIClient):
         try:
             return _ListaEmbrapa[CulturaEmbrapa].model_validate(payload).data
         except ValidationError:
-            raise EmbrapaError("Resposta de culturas incompatível com o contrato Agritec v2.") from None
+            raise EmbrapaError("Resposta de culturas incompatível com o contrato Agritec v2.", categoria="resposta_invalida") from None
+
+    def listar_culturas_municipio(self, codigo_ibge: int) -> list[CulturaEmbrapa]:
+        """Catálogo ZARC do município, evitando IDs de culturas sem cobertura local."""
+        if type(codigo_ibge) is not int or not 1000000 <= codigo_ibge <= 9999999:
+            raise ValueError("Informe um código IBGE municipal de sete dígitos.")
+        payload = self._get(f"municipios/{codigo_ibge}/culturas")
+        try:
+            return _ListaEmbrapa[CulturaEmbrapa].model_validate(payload).data
+        except ValidationError:
+            raise EmbrapaError("Catálogo municipal incompatível com a Agritec v2.", categoria="resposta_invalida") from None
 
     def consultar_zoneamento(self, consulta: ConsultaZoneamento) -> ResultadoZoneamento:
         """Obtém todas as janelas retornadas, mantendo seus solos e ciclos."""
@@ -129,7 +148,7 @@ class EmbrapaClient(_AgroAPIClient):
         try:
             janelas = _ListaEmbrapa[JanelaPlantio].model_validate(payload).data
         except ValidationError:
-            raise EmbrapaError("Resposta de zoneamento incompatível com o contrato Agritec v2.") from None
+            raise EmbrapaError("Resposta de zoneamento incompatível com o contrato Agritec v2.", categoria="resposta_invalida") from None
         return ResultadoZoneamento(consulta=consulta, janelas=janelas)
 
 

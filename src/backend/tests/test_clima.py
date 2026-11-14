@@ -141,7 +141,7 @@ def test_http_gera_orientacoes_com_nasa_e_avisa_ausencia_de_zoneamento(payload):
 def test_erro_embrapa_preserva_recomendacoes_climaticas(payload):
     servico, _ = service(payload)
     zoneamento = Mock()
-    zoneamento.listar_culturas.side_effect = EmbrapaError("HTTP 401", 401)
+    zoneamento.listar_culturas_municipio.side_effect = EmbrapaError("HTTP 401", 401)
     servico._zoneamento = zoneamento
     result = servico.recomendar(DadosAgricultor(**ENTRADA))
     assert result.analise_climatica_realizada
@@ -163,7 +163,7 @@ def test_erro_nasa_nao_fabrica_dados(payload):
 def test_cruzamento_nasa_e_embrapa_produz_janela_e_justificativa(payload):
     servico, clima = service(payload)
     zoneamento = Mock()
-    zoneamento.listar_culturas.return_value = [CulturaEmbrapa(
+    zoneamento.listar_culturas_municipio.return_value = [CulturaEmbrapa(
         id=1, nome="MILHO SEQUEIRO", cultivo="SEQUEIRO", hasZoneamento=True,
     )]
     zoneamento.consultar_zoneamento.return_value = ResultadoZoneamento(

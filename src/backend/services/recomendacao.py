@@ -3,25 +3,18 @@
 import unicodedata
 from typing import Protocol
 
-from ..models.embrapa import (
-    ConsultaZoneamento, CulturaEmbrapa, EmbrapaError, ResultadoZoneamento,
-)
+from ..models.embrapa import EmbrapaError
 from ..models.recomendacao import (
-    DadosAgricultor, FormaIrrigacao, JanelaRecomendada, Municipio,
-    OpcaoCultura, RecomendacaoResponse, ReferenciaTecnica,
+    DadosAgricultor, Municipio, RecomendacaoResponse, ReferenciaTecnica,
 )
 
 from ..models.clima import ClimaError, ResumoClimatico
 from .manejo import gerar_orientacoes
+from .zoneamento import FonteZoneamento, adicionar_zoneamento
 
 
 class FonteClima(Protocol):
     def obter_resumo(self, latitude: float, longitude: float) -> ResumoClimatico: ...
-
-
-class FonteZoneamento(Protocol):
-    def listar_culturas(self) -> list[CulturaEmbrapa]: ...
-    def consultar_zoneamento(self, consulta: ConsultaZoneamento) -> ResultadoZoneamento: ...
 
 
 class FonteReferencias(Protocol):
@@ -37,10 +30,6 @@ def _normalizar(texto: str) -> str:
         c for c in unicodedata.normalize("NFKD", texto.casefold())
         if not unicodedata.combining(c)
     ).split())
-
-
-def _opcao(cultura: CulturaEmbrapa) -> OpcaoCultura:
-    return OpcaoCultura(id=cultura.id, nome=cultura.nome_completo or cultura.nome, cultivo=cultura.cultivo)
 
 
 class RecomendacaoService:
@@ -87,64 +76,14 @@ class RecomendacaoService:
                 resposta.avisos.extend(resposta.resumo_climatico.avisos)
         else:
             resposta.avisos.append("Fonte climática não configurada para esta consulta.")
-        if self._zoneamento is not None:
-            try:
-                self._adicionar_zoneamento(dados, resposta)
-            except EmbrapaError as exc:
-                resposta.pendencias.append(f"Zoneamento Embrapa indisponível: {exc}")
-        else:
-            resposta.pendencias.append("O zoneamento Agritec não está configurado no servidor; a janela de plantio ainda precisa ser validada.")
+        adicionar_zoneamento(dados, resposta, self._zoneamento)
         if not resposta.janelas:
             resposta.pendencias.append("A época de plantio da cultura desejada não foi validada nesta consulta.")
         self._adicionar_referencias(dados, resposta)
         resposta.orientacoes = gerar_orientacoes(dados, resposta)
-        if resposta.janelas or resposta.analise_climatica_realizada:
+        if resposta.janelas or resposta.janelas_condicionais or resposta.analise_climatica_realizada:
             resposta.status = "orientacao_condicional"
         return resposta
-
-    def _adicionar_zoneamento(self, dados: DadosAgricultor, resposta: RecomendacaoResponse) -> None:
-        desejada = _normalizar(dados.cultura_desejada)
-        modalidade = "SEQUEIRO" if dados.forma_irrigacao == FormaIrrigacao.SEM_IRRIGACAO else "IRRIGADO"
-        culturas = self._zoneamento.listar_culturas()
-        resposta.fontes.append("Embrapa Agritec v2 / ZARC")
-        candidatas = []
-        for cultura in culturas:
-            if not cultura.possui_zoneamento or _normalizar(cultura.cultivo or "") != modalidade.casefold():
-                continue
-            nomes = {_normalizar(cultura.nome), _normalizar(cultura.nome_completo or "")}
-            nomes_base = {nome.removesuffix(" sequeiro").removesuffix(" irrigado") for nome in nomes}
-            if desejada in nomes or desejada in nomes_base:
-                candidatas.append(cultura)
-        if len(candidatas) != 1:
-            resposta.opcoes_cultura = [_opcao(c) for c in candidatas]
-            if candidatas:
-                resposta.pendencias.append("Há mais de uma cultura compatível; informe o nome completo de uma das opções.")
-            else:
-                resposta.pendencias.append("Cultura e modalidade de cultivo não identificadas no catálogo com zoneamento disponível.")
-            return
-
-        cultura = candidatas[0]
-        resposta.cultura = _opcao(cultura)
-        resultado = self._zoneamento.consultar_zoneamento(ConsultaZoneamento(
-            codigo_ibge=resposta.municipio.codigo_ibge, id_cultura=cultura.id,
-        ))
-        solo = dados.tipo_solo.value.upper().replace("_", " ")
-        for janela in resultado.janelas:
-            if (_normalizar(janela.solo) != _normalizar(solo)
-                    or _normalizar(janela.cultura_cultivo) != modalidade.casefold()
-                    or janela.risco != 20):
-                continue
-            resposta.janelas.append(JanelaRecomendada(
-                cultura=janela.cultura_nome_completo, solo=janela.solo, ciclo=janela.ciclo,
-                dia_inicio=janela.dia_inicio, mes_inicio=janela.mes_inicio,
-                dia_fim=janela.dia_fim, mes_fim=janela.mes_fim,
-                safra_inicio=janela.safra_inicio, safra_fim=janela.safra_fim,
-                risco=janela.risco, portaria=janela.portaria,
-            ))
-        if not resposta.janelas:
-            resposta.pendencias.append(
-                "Não foram encontradas janelas para a combinação consultada. Isso não comprova inaptidão da cultura. Não convertemos textura do solo automaticamente em classes AD1–AD6."
-            )
 
     def _adicionar_referencias(self, dados: DadosAgricultor, resposta: RecomendacaoResponse) -> None:
         if self._referencias is None:

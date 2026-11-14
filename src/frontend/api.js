@@ -51,6 +51,11 @@ export function buildPayload(formData) {
     if (!payload[key]) throw new Error("Preencha todos os campos antes de consultar.");
   }
   if (payload.restricoes.length > 2000) throw new Error("Descreva as restrições em até 2.000 caracteres.");
+  if (text("id_cultura")) {
+    const id = number("id_cultura", 1, Number.MAX_SAFE_INTEGER);
+    if (!Number.isSafeInteger(id)) throw new Error("Selecione uma opção válida de cultura.");
+    payload.id_cultura = id;
+  }
   return payload;
 }
 

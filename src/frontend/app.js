@@ -129,14 +129,16 @@ function updatePhBadge() {
 
 function chooseCulture(option) {
   const select = byId("cropSelect");
-  let entry = [...select.options].find((item) => item.value === option.nome);
+  let entry = [...select.options].find((item) => item.dataset.culturaId === String(option.id));
   if (!entry) {
     entry = document.createElement("option");
-    entry.value = option.nome;
-    entry.textContent = option.nome;
+    entry.value = `agritec:${option.id}`;
+    entry.textContent = `${option.nome} · ${option.cultivo || "modalidade a conferir"} · opção ${option.id}`;
+    entry.dataset.culturaId = String(option.id);
+    entry.dataset.culturaNome = option.nome;
     select.append(entry);
   }
-  select.value = option.nome;
+  select.value = entry.value;
   select.dispatchEvent(new Event("change"));
   goToScreen(2);
   select.focus();
@@ -147,7 +149,17 @@ async function submitForm(event) {
   if (state.submitting) return;
   if (state.locating) { feedback("formFeedback", "Aguarde a identificação do município."); return; }
   let payload;
-  try { payload = buildPayload(new FormData(byId("agroWizardForm"))); }
+  try {
+    const formData = new FormData(byId("agroWizardForm"));
+    const selected = byId("cropSelect").selectedOptions[0];
+    if (selected?.dataset.culturaId) {
+      formData.set("id_cultura", selected.dataset.culturaId);
+      formData.set("cultura_desejada", selected.dataset.culturaNome);
+    }
+    const classe = byId("zarcSoilClass").value;
+    if (classe) formData.set("tipo_solo", classe);
+    payload = buildPayload(formData);
+  }
   catch (error) { goToScreen(2); feedback("formFeedback", error.message); return; }
   feedback("formFeedback", "");
   state.submitting = true;
@@ -161,7 +173,11 @@ async function submitForm(event) {
   byId("screen-3").setAttribute("aria-busy", "true");
   try {
     const data = await recomendar(payload);
-    renderResults(data, chooseCulture);
+    renderResults(data, chooseCulture, () => {
+      goToScreen(2);
+      byId("zarcSoilDetails").open = true;
+      byId("zarcSoilClass").focus();
+    });
     state.lastResponse = data;
     byId("btnExportJson").disabled = false;
     show("backendResultsWrapper", true);
