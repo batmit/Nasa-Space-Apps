@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { ApiError, buildPayload, recomendar, requestJson } from "../api.js";
-import { renderClimate, renderResults, renderZarc } from "../results.js";
+import { renderClimate, renderResults, renderZarc, renderGemini } from "../results.js";
 
 const input = {
   regiao_nome: "Ouro Preto, MG", latitude: "-20.3856", longitude: "-43.5035",
@@ -56,7 +56,11 @@ class Element {
   constructor(tag) { this.tag = tag; this.children = []; this.textContent = ""; this.classList = { toggle: (name, enabled) => { this[name] = enabled; } }; }
   append(...children) { this.children.push(...children); }
   replaceChildren(...children) { this.children = children; }
-  addEventListener(name, callback) { this[name] = callback; }
+  addEventListener(name, callback) {
+    this.listeners ??= {};
+    this.listeners[name] = callback;
+    this[name] = callback;
+  }
   set innerHTML(_) { throw new Error("Conteúdo externo não deve ser renderizado como HTML"); }
 }
 
@@ -193,7 +197,7 @@ test("janelas condicionais ficam separadas das confirmadas e são limpas ao repe
 });
 
 test("terceira tela mantém IDs únicos e controles essenciais fora de blocos recolhidos", () => {
-  const html = readFileSync(new URL("../src/frontend/index.html", import.meta.url), "utf8");
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]);
   assert.equal(ids.length, new Set(ids).size, "IDs duplicados podem deixar dados invisíveis ou desatualizados");
   const third = html.slice(html.indexOf('<section id="screen-3"'));
@@ -223,4 +227,72 @@ test("resumo diferencia compatibilidade de confirmação agronômica e mantém f
   renderResults({ ...data, status_zarc: "falha_autenticacao" }, () => {});
   assert.match(nodes.get("diagTitle").textContent, /ainda precisa ser validado/);
   assert.match(nodes.get("zarcStatus").textContent, /recusado/);
+});
+
+test("payload preserva descrição do solo separada da classe ZARC", () => {
+  const payload = buildPayload(form({ ...input, tipo_solo: "AD1", tipo_solo_informado: "raso" }));
+  assert.equal(payload.tipo_solo, "AD1");
+  assert.equal(payload.tipo_solo_informado, "raso");
+});
+
+
+test("opções de cultura exibem modalidade e preservam o ID no callback", (context) => {
+  const nodes = new Map();
+  globalThis.document = {
+    createElement: (tag) => new Element(tag),
+    getElementById: (id) => {
+      if (!nodes.has(id)) nodes.set(id, new Element("div"));
+      return nodes.get(id);
+    },
+  };
+  context.after(() => { delete globalThis.document; });
+  const choices = [
+    { id: 1, nome: "MILHO SEQUEIRO" },
+    { id: 2, nome: "MILHO IRRIGADO", cultivo: "IRRIGADO" },
+  ];
+  let selected;
+  renderResults({
+    status: "dados_insuficientes", municipio: { nome: "Ouro Preto", uf: "MG" },
+    dados_informados: input, janelas: [], orientacoes: [], pendencias: [],
+    avisos: [], referencias: [], fontes: [], opcoes_cultura: choices,
+  }, (option) => { selected = option; });
+  const buttons = nodes.get("cultureOptions").children;
+  assert.equal(buttons[0].textContent, "Consultar MILHO SEQUEIRO");
+  assert.equal(buttons[1].textContent, "Consultar MILHO IRRIGADO");
+  buttons[0].listeners.click();
+  assert.equal(selected, choices[0]);
+  buttons[1].listeners.click();
+  assert.equal(selected, choices[1]);
+});
+
+test("Gemini aparece como interpretação, preserva evidências e limpa dados antigos em falhas", (context) => {
+  const nodes = new Map();
+  globalThis.document = {
+    createElement: (tag) => new Element(tag),
+    getElementById: (id) => {
+      if (!nodes.has(id)) nodes.set(id, new Element("div"));
+      return nodes.get(id);
+    },
+  };
+  context.after(() => { delete globalThis.document; });
+  renderGemini({ status_ia: "disponivel", explicacao_ia: {
+    resumo: "<img src=x onerror=alert(1)>", actions: [{ description: "Confirme a classe AD.",
+      evidencias: ["usuario", "zarc:condicional:0"] }],
+  } });
+  assert.equal(nodes.get("aiGuidance").hidden, false);
+  assert.equal(nodes.get("aiGuidance").open, false);
+  assert.equal(nodes.get("aiSummary").textContent, "<img src=x onerror=alert(1)>");
+  const action = nodes.get("aiActions").children[0];
+  assert.equal(action.children[0].textContent, "Confirme a classe AD.");
+  assert.match(action.children[1].children[1].textContent, /condicional/);
+  renderGemini({ status_ia: "indisponivel", explicacao_ia: null });
+  assert.equal(nodes.get("aiGuidance").hidden, true);
+  assert.equal(nodes.get("aiUnavailable").hidden, false);
+  assert.equal(nodes.get("aiSummary").textContent, "");
+  assert.equal(nodes.get("aiActions").children.length, 0);
+  renderGemini({ status_ia: "nao_configurado" });
+  assert.equal(nodes.get("aiUnavailable").hidden, true);
+  renderGemini({ status_ia: "disponivel", explicacao_ia: {} });
+  assert.equal(nodes.get("aiGuidance").hidden, true);
+  assert.equal(nodes.get("aiUnavailable").hidden, false);
 });

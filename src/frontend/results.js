@@ -39,6 +39,7 @@ export function renderResults(data, onChooseCulture, onReviewSoil) {
     return button;
   }));
   renderZarc(data, onReviewSoil);
+  renderGemini(data);
   const titles = {
     conservacao_agua: "Conservar água", planejamento_climatico: "Planejar com o histórico climático",
     cobertura_solo: "Proteger e diversificar o solo", epoca_plantio: "Conferir a época de plantio",
@@ -91,6 +92,37 @@ export function renderResults(data, onChooseCulture, onReviewSoil) {
   }));
   if (!data.referencias.length) references.append(element("p", "Nenhuma referência foi retornada nesta consulta."));
   renderClimate(data.resumo_climatico, data.analise_climatica_realizada);
+}
+
+export function renderGemini(data) {
+  const summary = document.getElementById("aiSummary");
+  const actions = document.getElementById("aiActions");
+  summary.textContent = "";
+  actions.replaceChildren();
+  const output = data.explicacao_ia;
+  const available = data.status_ia === "disponivel" && typeof output?.resumo === "string"
+    && Array.isArray(output.actions);
+  const panel = document.getElementById("aiGuidance");
+  panel.classList.toggle("hidden", !available);
+  panel.open = false;
+  document.getElementById("aiUnavailable").classList.toggle("hidden",
+    data.status_ia !== "indisponivel" && !(data.status_ia === "disponivel" && !available));
+  if (!available) return;
+  summary.textContent = output.resumo;
+  const evidenceLabel = (id) => id === "usuario" ? "Dados informados"
+    : id === "nasa:resumo" ? "Histórico NASA"
+    : id.startsWith("zarc:condicional:") ? "Período ZARC condicional"
+    : id.startsWith("zarc:janela:") ? "Período ZARC compatível"
+    : id.startsWith("embrapa:referencia:") ? "Publicação da Embrapa" : "Evidência a conferir";
+  actions.replaceChildren(...output.actions.map((action) => {
+    const item = element("li", "");
+    item.append(element("p", action.description));
+    const evidence = element("details", "", "guidance-evidence");
+    evidence.append(element("summary", "Dados utilizados"), element("p",
+      [...new Set((action.evidencias || []).map(evidenceLabel))].join(" · ")));
+    item.append(evidence);
+    return item;
+  }));
 }
 
 export function renderZarc(data, onReviewSoil) {

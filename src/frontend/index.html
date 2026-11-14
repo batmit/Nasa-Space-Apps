@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261114-results-4" />
+  <link rel="stylesheet" href="styles.css?v=20261114-gemini-5" />
 </head>
 <body class="bg-[#F6F8F5] text-slate-900 antialiased h-screen overflow-hidden flex flex-col">
 
@@ -459,6 +459,13 @@
           <div class="result-panel guidance-panel">
             <h3 class="result-section-title">Como cuidar da área?</h3>
             <p class="guidance-intro">Ações sugeridas para planejar o manejo.</p>
+            <details id="aiGuidance" class="hidden guidance-disclosure">
+              <summary>Interpretação personalizada · Gemini</summary>
+              <p class="guidance-source">Texto gerado por IA a partir dos dados da consulta. Não substitui a avaliação técnica nem confirma o plantio.</p>
+              <p id="aiSummary" class="guidance-text"></p>
+              <ol id="aiActions" class="result-list"></ol>
+            </details>
+            <p id="aiUnavailable" class="hidden guidance-source" role="status">A interpretação por IA está indisponível. As orientações e os dados das outras fontes foram preservados.</p>
             <div id="recommendations" class="guidance-list"></div>
             <details id="pendingDetails" class="guidance-disclosure guidance-pending">
               <summary>Pendências para validar <span id="pendingCount" class="guidance-count"></span></summary>
@@ -494,6 +501,6 @@
 
   </form>
 
-  <script type="module" src="app.js?v=20261114-results-4"></script>
+  <script type="module" src="app.js?v=20261114-gemini-5"></script>
 </body>
 </html>

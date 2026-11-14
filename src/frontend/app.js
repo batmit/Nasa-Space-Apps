@@ -1,5 +1,5 @@
-import { buildPayload, recomendar, buscarLocalizacao, resolverLocalizacao } from "./api.js?v=20261114-results-4";
-import { renderResults } from "./results.js?v=20261114-results-4";
+import { buildPayload, recomendar, buscarLocalizacao, resolverLocalizacao } from "./api.js?v=20261114-gemini-5";
+import { renderResults } from "./results.js?v=20261114-gemini-5";
 
 const state = {
   lat: -20.3856, lon: -43.5035, regionName: "Ouro Preto, MG", map: null, marker: null,
@@ -156,7 +156,10 @@ async function submitForm(event) {
       formData.set("cultura_desejada", selected.dataset.culturaNome);
     }
     const classe = byId("zarcSoilClass").value;
-    if (classe) formData.set("tipo_solo", classe);
+    if (classe) {
+      formData.set("tipo_solo_informado", formData.get("tipo_solo"));
+      formData.set("tipo_solo", classe);
+    }
     payload = buildPayload(formData);
   }
   catch (error) { goToScreen(2); feedback("formFeedback", error.message); return; }
