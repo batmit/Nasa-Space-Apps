@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { ApiError, buildPayload, recomendar, requestJson } from "../src/frontend/api.js";
-import { renderClimate, renderResults } from "../src/frontend/results.js";
+import { renderClimate, renderResults, renderZarc } from "../src/frontend/results.js";
 
 const input = {
   regiao_nome: "Ouro Preto, MG", latitude: "-20.3856", longitude: "-43.5035",
@@ -27,6 +27,12 @@ test("coordenadas ausentes, inválidas e restrições longas não são enviadas"
   }
 });
 
+test("ID opcional da escolha de cultura é inteiro e não é adicionado ao envio inicial", () => {
+  assert.equal(buildPayload(form({ ...input, id_cultura: "20" })).id_cultura, 20);
+  assert.equal("id_cultura" in buildPayload(form(input)), false);
+  for (const id of ["0", "1.5", "NaN", "-1"]) assert.throws(() => buildPayload(form({ ...input, id_cultura: id })));
+});
+
 test("chamada usa a rota real, mesma origem e JSON", async (context) => {
   context.mock.method(globalThis, "fetch", async (path, options) => {
     assert.equal(path, "/api/v1/recomendar");
@@ -47,7 +53,7 @@ test("erros HTTP, JSON inválido e rede são informados sem resposta fictícia",
 });
 
 class Element {
-  constructor(tag) { this.tag = tag; this.children = []; this.textContent = ""; }
+  constructor(tag) { this.tag = tag; this.children = []; this.textContent = ""; this.classList = { toggle: (name, enabled) => { this[name] = enabled; } }; }
   append(...children) { this.children.push(...children); }
   replaceChildren(...children) { this.children = children; }
   addEventListener() {}
@@ -109,4 +115,33 @@ test("resumo NASA exibe unidades corretas e limpa métricas quando indisponível
   assert.equal(nodes.get("climateMetrics").children.length, 0);
   assert.equal(nodes.get("climateMonthly").children.length, 0);
   assert.match(nodes.get("nasaStatus").textContent, /indisponível/);
+});
+
+test("janelas condicionais ficam separadas das confirmadas e são limpas ao repetir consulta", (context) => {
+  const nodes = new Map();
+  globalThis.document = {
+    createElement: (tag) => new Element(tag),
+    getElementById: (id) => {
+      if (!nodes.has(id)) nodes.set(id, new Element("div"));
+      return nodes.get(id);
+    },
+  };
+  context.after(() => { delete globalThis.document; });
+  const window = { cultura: "MILHO", solo: "AD3", ciclo: "I", dia_inicio: 1, mes_inicio: 11,
+    dia_fim: 30, mes_fim: 11, safra_inicio: 2026, safra_fim: 2027, risco: 20,
+    portaria: "Portaria", condicao: "Confirmar AD3 antes do plantio." };
+  const review = () => {};
+  renderZarc({ status_zarc: "classe_solo_pendente", mensagem_zarc: "Confirme o solo",
+    janelas_confirmadas: [], janelas_condicionais: [window] }, review);
+  assert.equal(nodes.get("plantingWindows").children[0].tag, "p");
+  assert.equal(nodes.get("conditionalWindows").children.length, 1);
+  assert.equal(nodes.get("conditionalWindowsSection").hidden, false);
+  assert.equal(nodes.get("btnReviewSoil").onclick, review);
+  assert.match(nodes.get("zarcStatus").textContent, /pendente/);
+  renderZarc({ status_zarc: "disponivel", janelas_confirmadas: [window], janelas_condicionais: [] });
+  assert.equal(nodes.get("plantingWindows").children[0].tag, "article");
+  assert.equal(nodes.get("conditionalWindows").children.length, 0);
+  assert.equal(nodes.get("conditionalWindowsSection").hidden, true);
+  renderZarc({ status_zarc: "falha_autenticacao", janelas: [], janelas_condicionais: [] });
+  assert.match(nodes.get("zarcStatus").textContent, /recusado/);
 });

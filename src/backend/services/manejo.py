@@ -15,6 +15,13 @@ def gerar_orientacoes(dados: DadosAgricultor, resultado: RecomendacaoResponse) -
             texto="Planeje o plantio dentro de uma das janelas listadas, conferindo solo, ciclo, modalidade e safra. Confirme as condições atuais antes de executar o plantio.",
             evidencias=[f"{len(resultado.janelas)} janela(s) compatível(is) com os filtros informados; risco ZARC de 20%."],
         ))
+    if resultado.janelas_condicionais:
+        orientacoes.append(Orientacao(
+            tema="validar_solo_zarc", fonte="Embrapa Agritec v2 / ZARC",
+            texto="Confirme tecnicamente a classificação do solo antes de utilizar qualquer janela condicional. A textura ou a profundidade informada não estabelece equivalência automática com uma classe AD.",
+            evidencias=[f"{len(resultado.janelas_condicionais)} janela(s) dependem de confirmação do solo.",
+                        "Classificações retornadas: " + ", ".join(resultado.diagnostico_zarc.solos_disponiveis)],
+        ))
     clima = resultado.resumo_climatico
     if clima:
         secos = clima.maior_sequencia_dias_sem_chuva

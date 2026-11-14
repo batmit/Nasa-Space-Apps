@@ -57,7 +57,7 @@ class RecomendacaoTests(unittest.TestCase):
         self.localizador.resolver_municipio.return_value = Municipio(
             codigo_ibge=3502804, nome="Araçatuba", uf="SP",
         )
-        self.zoneamento.listar_culturas.return_value = [cultura()]
+        self.zoneamento.listar_culturas_municipio.return_value = [cultura()]
         self.zoneamento.consultar_zoneamento.return_value = ResultadoZoneamento(
             consulta=ConsultaZoneamento(codigo_ibge=3502804, id_cultura=1),
             janelas=[janela(), janela(solo="AD1"), janela(risco=30), janela(culturaCultivo="IRRIGADO")],
@@ -82,7 +82,7 @@ class RecomendacaoTests(unittest.TestCase):
 
     def test_contrato_frontend_preserva_contexto_e_avisa_divergencia(self):
         payload = self.client.post("/api/v1/recomendar", json=ENTRADA).json()
-        self.assertEqual(payload["dados_informados"], ENTRADA)
+        self.assertEqual(payload["dados_informados"], dict(ENTRADA, id_cultura=None))
         self.assertEqual(payload["municipio"]["codigo_ibge"], 3502804)
         self.assertTrue(any("difere" in aviso for aviso in payload["avisos"]))
         self.assertIn("recuperar solo", self.referencias.buscar_referencias.call_args.args[0])
@@ -94,7 +94,7 @@ class RecomendacaoTests(unittest.TestCase):
         self.assertFalse(any("difere" in aviso for aviso in payload["avisos"]))
 
     def test_cultura_ambigua_nao_escolhe_id_arbitrario(self):
-        self.zoneamento.listar_culturas.return_value = [cultura(), cultura(id=2)]
+        self.zoneamento.listar_culturas_municipio.return_value = [cultura(), cultura(id=2)]
         result = self.servico.recomendar(DadosAgricultor(**ENTRADA))
         self.assertEqual(result.status, "dados_insuficientes")
         self.assertEqual(len(result.opcoes_cultura), 2)
@@ -108,7 +108,8 @@ class RecomendacaoTests(unittest.TestCase):
     def test_solo_sem_janela_nao_inventa_classe_ad(self):
         result = self.servico.recomendar(DadosAgricultor(**dict(ENTRADA, tipo_solo="arenoso")))
         self.assertEqual(result.janelas, [])
-        self.assertEqual(result.status, "dados_insuficientes")
+        self.assertEqual(result.status_zarc, "classe_solo_pendente")
+        self.assertEqual(result.janelas_condicionais[0].solo, "AD1")
 
     def test_falha_referencias_preserva_zoneamento(self):
         self.referencias.buscar_referencias.side_effect = EmbrapaError("offline")
@@ -125,7 +126,7 @@ class RecomendacaoTests(unittest.TestCase):
         self.assertNotIn("risco", ConsultaZoneamento.model_fields)
 
     def test_falhas_externas_e_localizacao(self):
-        self.zoneamento.listar_culturas.side_effect = EmbrapaError("Falha externa", 401)
+        self.zoneamento.listar_culturas_municipio.side_effect = EmbrapaError("Falha externa", 401)
         response = self.client.post("/api/v1/recomendar", json=ENTRADA)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "dados_insuficientes")

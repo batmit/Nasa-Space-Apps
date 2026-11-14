@@ -187,7 +187,7 @@
 
             <hr class="border-slate-200" />
 
-            <!-- B. Tipo de Solo (chave: tipo_solo | valores: misto, argiloso, arenoso, raso) -->
+            <!-- B. Tipo de Solo -->
             <div>
               <span class="block text-sm font-extrabold text-slate-900 mb-1">
                 B. Como é a terra desse talhão?
@@ -230,6 +230,18 @@
             </div>
 
             <hr class="border-slate-200" />
+
+            <details id="zarcSoilDetails" class="result-card">
+              <summary class="font-extrabold cursor-pointer">Conhece a classe do solo no ZARC?</summary>
+              <label for="zarcSoilClass" class="block text-sm font-bold mt-3">Classificação de disponibilidade de água do solo</label>
+              <p class="text-xs text-slate-600 mt-1 mb-2">Informe somente uma classe conhecida por avaliação técnica. Não deduza AD1–AD6 apenas pela textura ou profundidade. Se não souber, mantenha a opção abaixo.</p>
+              <select id="zarcSoilClass" class="w-full rounded-xl border-2 border-slate-300 px-3 py-3 bg-white">
+                <option value="">Não sei — usar o tipo de solo informado</option>
+                <option value="AD1">AD1</option><option value="AD2">AD2</option>
+                <option value="AD3">AD3</option><option value="AD4">AD4</option>
+                <option value="AD5">AD5</option><option value="AD6">AD6</option>
+              </select>
+            </details>
 
             <!-- C. Acidez da Terra (chave unificada: ph) -->
             <div>
@@ -424,7 +436,20 @@
           <div class="result-panel">
             <h3 class="font-extrabold text-lg">Janelas de plantio — ZARC</h3>
             <p class="text-sm text-slate-600 mt-1">Cada período se aplica somente ao solo, ciclo e safra indicados.</p>
+            <p id="zarcStatus" class="font-bold mt-3" role="status"></p>
+            <p id="zarcMessage" class="text-sm text-slate-600 mt-2"></p>
+            <h4 class="font-extrabold mt-4">Janelas compatíveis com os filtros informados</h4>
             <div id="plantingWindows" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4"></div>
+            <div id="conditionalWindowsSection" class="hidden mt-5">
+              <h4 class="font-extrabold text-amber-900">Janelas condicionais — classificação do solo pendente</h4>
+              <p class="text-sm text-amber-900 mt-1">Estes períodos não validam o plantio na propriedade. Cada opção exige confirmar a classificação de solo indicada.</p>
+              <button type="button" id="btnReviewSoil" class="secondary-button mt-3">Revisar classificação do solo</button>
+              <div id="conditionalWindows" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4"></div>
+            </div>
+            <details class="mt-4 text-sm">
+              <summary class="font-bold cursor-pointer">Detalhes da consulta ZARC</summary>
+              <ul id="zarcDiagnostics" class="result-list"></ul>
+            </details>
           </div>
           <div class="result-panel">
             <h3 class="font-extrabold text-lg">Orientações e condições</h3>

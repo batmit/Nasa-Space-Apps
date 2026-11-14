@@ -11,7 +11,7 @@ function list(id, values, emptyText) {
   container.replaceChildren(...(values.length ? values : [emptyText]).map((value) => element("li", value)));
 }
 
-export function renderResults(data, onChooseCulture) {
+export function renderResults(data, onChooseCulture, onReviewSoil) {
   if (!["orientacao_condicional", "dados_insuficientes"].includes(data?.status)
       || !data.municipio || !data.dados_informados
       || !["janelas", "orientacoes", "pendencias", "avisos", "referencias", "fontes", "opcoes_cultura"].every((key) => Array.isArray(data[key]))) {
@@ -26,22 +26,12 @@ export function renderResults(data, onChooseCulture) {
 
   const options = document.getElementById("cultureOptions");
   options.replaceChildren(...data.opcoes_cultura.map((option) => {
-    const button = element("button", option.nome, "secondary-button");
+    const button = element("button", `${option.nome} · ${option.cultivo || "modalidade a conferir"}`, "secondary-button");
     button.type = "button";
     button.addEventListener("click", () => onChooseCulture(option));
     return button;
   }));
-  const windows = document.getElementById("plantingWindows");
-  windows.replaceChildren(...data.janelas.map((window) => {
-    const card = element("article", "", "result-card");
-    card.append(element("h4", window.cultura, "font-extrabold"),
-      element("p", `${window.dia_inicio}/${window.mes_inicio} a ${window.dia_fim}/${window.mes_fim}`, "window-period"),
-      element("p", `Solo: ${window.solo} · Ciclo: ${window.ciclo}`),
-      element("p", `Safra: ${window.safra_inicio}/${window.safra_fim} · Nível ZARC: ${window.risco}%`),
-      element("p", window.portaria, "text-sm text-slate-600"));
-    return card;
-  }));
-  if (!data.janelas.length) windows.append(element("p", "Nenhuma janela compatível foi retornada. Confira as pendências abaixo."));
+  renderZarc(data, onReviewSoil);
   const recommendations = document.getElementById("recommendations");
   recommendations.replaceChildren(...data.orientacoes.map((item) => {
     const section = element("div", "");
@@ -80,6 +70,55 @@ export function renderResults(data, onChooseCulture) {
   }));
   if (!data.referencias.length) references.append(element("p", "Nenhuma referência foi retornada nesta consulta."));
   renderClimate(data.resumo_climatico, data.analise_climatica_realizada);
+}
+
+export function renderZarc(data, onReviewSoil) {
+  const labels = {
+    disponivel: "ZARC: janelas compatíveis com os filtros",
+    parcial: "ZARC: há janelas compatíveis e outras condicionais",
+    classe_solo_pendente: "ZARC: classificação do solo pendente",
+    cultura_ambigua: "ZARC: selecione a opção de cultura",
+    cultura_nao_encontrada: "ZARC: cultura não encontrada no município",
+    cultura_invalida: "ZARC: selecione novamente a cultura",
+    modalidade_indisponivel: "ZARC: modalidade indisponível",
+    sem_dados: "ZARC: consulta sem dados",
+    sem_dados_compativeis: "ZARC: janelas retornadas não atendem aos filtros",
+    nao_configurado: "ZARC: fonte não configurada",
+    falha_autenticacao: "ZARC: acesso à Embrapa recusado",
+    limite_consultas: "ZARC: limite de consultas atingido",
+    falha_conexao: "ZARC: falha de conexão",
+    resposta_invalida: "ZARC: resposta incompatível",
+    falha_api: "ZARC: falha na consulta",
+  };
+  document.getElementById("zarcStatus").textContent = labels[data.status_zarc] || "ZARC: confira o resultado da consulta";
+  document.getElementById("zarcMessage").textContent = data.mensagem_zarc || "Confira as pendências e as condições de cada período.";
+  const card = (window, conditional) => {
+    const article = element("article", "", conditional ? "result-card conditional-window" : "result-card");
+    article.append(element("h4", window.cultura, "font-extrabold"),
+      element("p", `${window.dia_inicio}/${window.mes_inicio} a ${window.dia_fim}/${window.mes_fim}`, "window-period"),
+      element("p", `Solo: ${window.solo} · Ciclo: ${window.ciclo}`),
+      element("p", `Safra: ${window.safra_inicio}/${window.safra_fim} · Nível ZARC: ${window.risco}%`),
+      element("p", window.portaria, "text-sm text-slate-600"));
+    if (conditional) article.append(element("p", window.condicao, "font-bold text-amber-900 mt-3"));
+    return article;
+  };
+  const confirmed = data.janelas_confirmadas || data.janelas || [];
+  const conditional = data.janelas_condicionais || [];
+  const windows = document.getElementById("plantingWindows");
+  windows.replaceChildren(...confirmed.map((window) => card(window, false)));
+  if (!confirmed.length) windows.append(element("p", "Nenhuma janela foi confirmada para os filtros informados."));
+  document.getElementById("conditionalWindows").replaceChildren(...conditional.map((window) => card(window, true)));
+  document.getElementById("conditionalWindowsSection").classList.toggle("hidden", !conditional.length);
+  const button = document.getElementById("btnReviewSoil");
+  button.disabled = typeof onReviewSoil !== "function";
+  button.onclick = typeof onReviewSoil === "function" ? onReviewSoil : null;
+  const diag = data.diagnostico_zarc;
+  list("zarcDiagnostics", diag ? [
+    `Etapa: ${diag.etapa} · Risco consultado: ${diag.risco_consultado}%`,
+    `Janelas recebidas: ${diag.total_recebidas} · Compatíveis: ${confirmed.length} · Condicionais: ${conditional.length}`,
+    `Descartadas por risco: ${diag.descartadas_risco} · Modalidade: ${diag.descartadas_modalidade} · Solo: ${diag.descartadas_solo}`,
+    `Classificações retornadas: ${diag.solos_disponiveis.join(", ") || "nenhuma"}`,
+  ] : [], "Diagnóstico detalhado não informado.");
 }
 
 export function renderClimate(climate, available) {

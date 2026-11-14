@@ -18,6 +18,7 @@ body {
 .result-panel { padding: 1.5rem; background: white; border: 2px solid #e2e8f0; border-radius: 1.5rem; }
 .result-panel.bg-slate-900 { background: #0f172a; }
 .result-card { padding: 1rem; border: 1px solid #cbd5e1; border-radius: 1rem; overflow-wrap: anywhere; }
+.conditional-window { border-color: #f59e0b; background: #fffbeb; }
 .window-period { color: #047857; font-size: 1.25rem; font-weight: 800; margin: .5rem 0; }
 .result-list { list-style: disc; padding-left: 1.25rem; margin-top: .5rem; }
 .result-list li + li { margin-top: .5rem; }

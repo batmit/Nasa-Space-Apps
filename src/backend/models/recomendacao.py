@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from .clima import ResumoClimatico
 
@@ -38,6 +38,7 @@ class DadosAgricultor(BaseModel):
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
     cultura_desejada: str = Field(min_length=1, max_length=100)
+    id_cultura: int | None = Field(default=None, gt=0, strict=True)
     tipo_solo: TipoSolo
     ph: float = Field(ge=0, le=14)
     forma_irrigacao: FormaIrrigacao
@@ -78,6 +79,22 @@ class JanelaRecomendada(BaseModel):
     portaria: str
 
 
+class JanelaCondicional(JanelaRecomendada):
+    condicao: str
+
+
+class DiagnosticoZarc(BaseModel):
+    etapa: str = "configuracao"
+    codigo_ibge: int | None = None
+    id_cultura: int | None = None
+    risco_consultado: Literal[20] = 20
+    total_recebidas: int = 0
+    descartadas_risco: int = 0
+    descartadas_modalidade: int = 0
+    descartadas_solo: int = 0
+    solos_disponiveis: list[str] = Field(default_factory=list)
+
+
 class ReferenciaTecnica(BaseModel):
     id: str
     pergunta: str
@@ -103,6 +120,15 @@ class RecomendacaoResponse(BaseModel):
     cultura: OpcaoCultura | None = None
     opcoes_cultura: list[OpcaoCultura] = Field(default_factory=list)
     janelas: list[JanelaRecomendada] = Field(default_factory=list)
+    janelas_condicionais: list[JanelaCondicional] = Field(default_factory=list)
+    status_zarc: Literal[
+        "nao_configurado", "cultura_ambigua", "cultura_nao_encontrada", "cultura_invalida",
+        "modalidade_indisponivel", "sem_dados", "sem_dados_compativeis", "classe_solo_pendente",
+        "disponivel", "parcial", "falha_autenticacao", "limite_consultas", "falha_conexao",
+        "resposta_invalida", "falha_api",
+    ] = "nao_configurado"
+    mensagem_zarc: str = "Zoneamento ainda não consultado."
+    diagnostico_zarc: DiagnosticoZarc = Field(default_factory=DiagnosticoZarc)
     orientacoes: list[Orientacao] = Field(default_factory=list)
     referencias: list[ReferenciaTecnica] = Field(default_factory=list)
     pendencias: list[str] = Field(default_factory=list)
@@ -111,3 +137,9 @@ class RecomendacaoResponse(BaseModel):
     analise_climatica_realizada: bool = False
     resumo_climatico: ResumoClimatico | None = None
     fontes: list[str] = Field(default_factory=list)
+
+    @computed_field
+    @property
+    def janelas_confirmadas(self) -> list[JanelaRecomendada]:
+        """Alias público; janelas permanece compatível com clientes existentes."""
+        return self.janelas
