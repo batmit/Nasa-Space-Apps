@@ -145,7 +145,7 @@ def test_configuracao_usa_chave_explicita_modelo_e_timeout():
     with patch.dict("os.environ", {"GEMINI_API_KEY": "teste", "GEMINI_MODEL": "modelo-teste"}), patch("google.genai.Client") as client:
         adapter = obter_orientador_ia()
     assert adapter._model == "modelo-teste"
-    client.assert_called_once_with(api_key="teste", http_options={"timeout": 30000})
+    client.assert_called_once_with(api_key="teste", http_options={"timeout": 60000})
 
 
 def test_contexto_sem_fontes_nao_fabrica_evidencias(resposta):
