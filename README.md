@@ -195,6 +195,24 @@ para distinguir ausência de dados de janelas descartadas pelos filtros.
 
 ## NASA e recomendações
 
+Na etapa 2, **Ver sensor da área** ativa um cenário teórico para demonstração
+acadêmica. Não há conexão com Arduino: cultura, solo, pH e manejo são hipóteses
+identificadas no formulário e no resultado. Umidade e temperatura ilustrativas
+não entram no contrato da API. O modo manual continua separado.
+
+A tela de resultados mostra o histórico NASA, uma projeção de chuva para os
+próximos 12 meses e uma sugestão breve de rotação. A projeção repete a média
+observada de cada mês do ano no histórico recente de 18 meses; ela não é um
+modelo meteorológico validado. O Gemini recebe a projeção na mesma chamada
+que recebe os dados do agricultor e as demais fontes. Pode gerar uma estimativa
+**exploratória** de 0 a 100% para o **estabelecimento das culturas** sugeridas,
+com justificativa curta. A interface identifica essa estimativa como exploratória.
+Se não houver projeção, não apresenta porcentagem. O serviço também aceita um
+adaptador opcional `previsao_chuva` que implemente `obter_previsao(latitude,
+longitude)` e devolva `PrevisaoChuva`, para uma fonte futura separada da NASA.
+Quando `estimativa_estabelecimento` trouxer probabilidade calibrada, o Gemini
+deve copiar exatamente esse valor e citar sua fonte.
+
 A consulta inicial do frontend continua com dez campos; a escolha de uma
 opção específica pode acrescentar `id_cultura`. O backend escolhe
 os 18 meses completos anteriores ao mês atual (em novembro de 2026:

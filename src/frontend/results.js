@@ -41,6 +41,7 @@ export function renderResults(data, onChooseCulture, onReviewSoil) {
     throw new Error("O resultado recebido não está no formato esperado. Tente novamente.");
   }
   const informed = data.dados_informados;
+  document.getElementById("demoResultNotice").classList.toggle("hidden", !informed.modo_demonstracao);
   const crop = informed.cultura_desejada?.replaceAll("_", " ") || "Cultura não informada";
   const irrigation = informed.forma_irrigacao === "sem_irrigacao" ? "de sequeiro" : "irrigada";
   const soil = informed.tipo_solo?.toUpperCase().match(/^AD[1-6]$/)
@@ -105,8 +106,17 @@ export function renderResults(data, onChooseCulture, onReviewSoil) {
 export function renderGemini(data) {
   const summary = document.getElementById("aiSummary");
   const actions = document.getElementById("aiActions");
+  const rotation = document.getElementById("rotationSuggestion");
+  const probability = document.getElementById("rotationProbability");
+  const estimate = document.getElementById("rotationEstimate");
+  estimate.classList.toggle("hidden", true);
+  document.getElementById("rotationEstimateLabel").textContent = "";
+  document.getElementById("rotationProbabilityValue").textContent = "";
+  document.getElementById("rotationEstimateNote").textContent = "";
   summary.textContent = "";
   actions.replaceChildren();
+  rotation.textContent = "A sugestão de rotação não foi gerada nesta consulta.";
+  probability.textContent = "Revise a projeção de chuva acima e consulte novamente para obter a estimativa.";
   const output = data.explicacao_ia;
   const available = data.status_ia === "disponivel" && typeof output?.resumo === "string"
     && Array.isArray(output.actions);
@@ -119,6 +129,19 @@ export function renderGemini(data) {
   summary.textContent = output.resumo;
   actions.replaceChildren(...output.actions.map((action) =>
     element("p", action.description, "ai-action-paragraph")));
+  if (output.sugestao_rotacao) {
+    rotation.textContent = output.sugestao_rotacao.orientacao;
+    if (typeof output.sugestao_rotacao.probabilidade_estabelecimento_pct === "number") {
+      estimate.classList.toggle("hidden", false);
+      document.getElementById("rotationEstimateLabel").textContent = "Chance de estabelecimento";
+      document.getElementById("rotationProbabilityValue").textContent = `${output.sugestao_rotacao.probabilidade_estabelecimento_pct.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+      document.getElementById("rotationEstimateNote").textContent = data.estimativa_estabelecimento
+        ? "Estimativa calibrada" : "Estimativa exploratória pelo Gemini";
+      probability.textContent = "";
+    } else {
+      probability.textContent = output.sugestao_rotacao.justificativa;
+    }
+  }
 }
 
 export function renderZarc(data, onReviewSoil) {
@@ -203,9 +226,15 @@ export function renderClimate(climate, available) {
   const metrics = document.getElementById("climateMetrics");
   const monthly = document.getElementById("climateMonthly");
   const chart = document.getElementById("climateChart");
+  const forecastPanel = document.getElementById("forecastPanel");
+  const forecastMonths = document.getElementById("forecastMonths");
+  const forecastTable = document.getElementById("forecastTable");
   metrics.replaceChildren();
   monthly.replaceChildren();
   chart.replaceChildren();
+  forecastMonths.replaceChildren();
+  forecastTable.replaceChildren();
+  forecastPanel.classList.toggle("hidden", true);
   if (!available || !climate) {
     document.getElementById("nasaStatus").textContent = "Consulte novamente para ver o histórico climático deste local.";
     return;
@@ -281,4 +310,32 @@ export function renderClimate(climate, available) {
   }
   table.append(head, body);
   monthly.append(table);
+  const projection = climate.projecao_chuva;
+  if (projection && Array.isArray(projection.meses) && projection.meses.length) {
+    forecastPanel.classList.toggle("hidden", false);
+    document.getElementById("forecastTotal").textContent = `Total projetado para 12 meses: ${format(projection.total_estimado_mm, "mm")}`;
+    document.getElementById("forecastNote").textContent = projection.aviso || "Projeção baseada na repetição do histórico recente; não é previsão meteorológica validada.";
+    for (const month of projection.meses.slice(0, 3)) {
+      const item = element("p", "");
+      item.append(element("strong", `${names[month.mes - 1] || month.mes}/${month.ano}`),
+        element("span", format(month.precipitacao_estimada_mm, "mm")));
+      forecastMonths.append(item);
+    }
+    const projectedTable = element("table", "", "climate-table");
+    const projectedHead = element("thead", "");
+    const projectedHeader = element("tr", "");
+    for (const label of ["Mês/ano", "Chuva estimada (mm)", "Meses históricos usados"]) {
+      const th = element("th", label); th.scope = "col"; projectedHeader.append(th);
+    }
+    projectedHead.append(projectedHeader);
+    const projectedBody = element("tbody", "");
+    for (const month of projection.meses) {
+      const row = element("tr", "");
+      for (const value of [`${names[month.mes - 1] || month.mes}/${month.ano}`,
+        format(month.precipitacao_estimada_mm, ""), month.meses_historicos_utilizados]) row.append(element("td", value));
+      projectedBody.append(row);
+    }
+    projectedTable.append(projectedHead, projectedBody);
+    forecastTable.append(projectedTable);
+  }
 }

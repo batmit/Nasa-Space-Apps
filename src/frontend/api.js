@@ -52,6 +52,7 @@ export function buildPayload(formData) {
   }
   if (payload.restricoes.length > 2000) throw new Error("Descreva as restrições em até 2.000 caracteres.");
   if (text("tipo_solo_informado")) payload.tipo_solo_informado = text("tipo_solo_informado");
+  if (text("modo_demonstracao") === "true") payload.modo_demonstracao = true;
   if (text("id_cultura")) {
     const id = number("id_cultura", 1, Number.MAX_SAFE_INTEGER);
     if (!Number.isSafeInteger(id)) throw new Error("Selecione uma opção válida de cultura.");

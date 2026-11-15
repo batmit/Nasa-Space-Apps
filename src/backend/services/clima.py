@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from statistics import mean
 
 from ..integration.nasa_power import NasaPowerError, request_NASA_API
-from ..models.clima import ClimaError, MesClimatico, ResumoClimatico
+from ..models.clima import ClimaError, MesClimatico, MesProjetado, ProjecaoChuva, ResumoClimatico
 
 
 def _media(values: list[float]) -> float | None:
@@ -151,6 +151,26 @@ def resumir_clima(payload: dict, inicio: date, fim: date) -> ResumoClimatico:
     )
 
 
+def projetar_chuva(resumo: ResumoClimatico, hoje: date) -> ProjecaoChuva:
+    """Repete a média de cada mês do ano nos próximos 12 meses completos."""
+    historico = {mes.mes: mes for mes in resumo.meses}
+    meses = []
+    for deslocamento in range(1, 13):
+        ano, mes_zero = divmod(hoje.year * 12 + hoje.month - 1 + deslocamento, 12)
+        mes = mes_zero + 1
+        observado = historico.get(mes)
+        meses.append(MesProjetado(
+            ano=ano, mes=mes,
+            precipitacao_estimada_mm=observado.precipitacao_media_mm if observado else None,
+            meses_historicos_utilizados=observado.anos_chuva_completos if observado else 0,
+        ))
+    total = (
+        round(sum(mes.precipitacao_estimada_mm for mes in meses), 2)
+        if all(mes.precipitacao_estimada_mm is not None for mes in meses) else None
+    )
+    return ProjecaoChuva(meses=meses, total_estimado_mm=total)
+
+
 class NasaClimaService:
     """Consulta os últimos 18 meses completos, sem incluir o mês em andamento."""
 
@@ -166,4 +186,6 @@ class NasaClimaService:
             payload = request_NASA_API(latitude, longitude, inicio.strftime("%Y%m%d"), fim.strftime("%Y%m%d"))
         except (NasaPowerError, OSError) as exc:
             raise ClimaError("Não foi possível obter ou armazenar os dados NASA POWER.") from exc
-        return resumir_clima(payload, inicio, fim)
+        resumo = resumir_clima(payload, inicio, fim)
+        resumo.projecao_chuva = projetar_chuva(resumo, hoje)
+        return resumo

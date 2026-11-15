@@ -1,6 +1,8 @@
 """Qualidade do histórico, regras de manejo e contrato NASA → serviço → HTTP."""
 
+import json
 from datetime import date, timedelta
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
@@ -8,12 +10,13 @@ from fastapi.testclient import TestClient
 
 from src.backend.main import app
 from src.backend.models.clima import ClimaError
+from src.backend.integration.gemini_api import GeminiClient
 from src.backend.models.recomendacao import DadosAgricultor, Municipio
 from src.backend.models.embrapa import (
     ConsultaZoneamento, CulturaEmbrapa, EmbrapaError, JanelaPlantio, ResultadoZoneamento,
 )
 from src.backend.modules.routes import obter_servico_recomendacao
-from src.backend.services.clima import NasaClimaService, resumir_clima
+from src.backend.services.clima import NasaClimaService, resumir_clima, projetar_chuva
 from src.backend.services.recomendacao import RecomendacaoService
 
 
@@ -62,6 +65,19 @@ def test_resumo_soma_chuva_por_ano_e_converte_radiacao(payload):
     assert result.radiacao_media_mj_m2_dia == 14.4
     assert result.umidade_relativa_ar_pct == 70.0
     assert result.maior_sequencia_dias_sem_chuva == 335
+
+
+def test_projecao_usa_mes_do_ano_e_preserva_lacunas():
+    inicio, fim = date(2025, 5, 1), date(2026, 10, 31)
+    resumo = resumir_clima(payload_periodo(inicio, fim), inicio, fim)
+    projecao = projetar_chuva(resumo, date(2026, 11, 15))
+    assert (projecao.meses[0].ano, projecao.meses[0].mes) == (2026, 12)
+    assert projecao.meses[1].precipitacao_estimada_mm == 310
+    assert projecao.total_estimado_mm == 310
+    resumo.meses[0].precipitacao_media_mm = None
+    incompleta = projetar_chuva(resumo, date(2026, 11, 15))
+    assert incompleta.meses[1].precipitacao_estimada_mm is None
+    assert incompleta.total_estimado_mm is None
 
 
 def test_lacunas_nao_viram_totais_de_chuva_ou_valores_zero(payload):
@@ -246,3 +262,64 @@ def test_cruzamento_nasa_e_embrapa_produz_janela_e_justificativa(payload):
     assert len(result.janelas) == 1
     assert not result.analise_climatica_realizada
     assert result.status == "orientacao_condicional"
+
+
+@pytest.mark.parametrize("falha_gemini", [False, True])
+def test_http_encadeia_nasa_embrapa_gemini_e_preserva_fontes_na_falha(falha_gemini):
+    localizador = Mock()
+    localizador.resolver_municipio.return_value = Municipio(codigo_ibge=3146107, nome="Ouro Preto", uf="MG")
+    zoneamento = Mock()
+    zoneamento.listar_culturas_municipio.return_value = [CulturaEmbrapa(
+        id=1, nome="MILHO SEQUEIRO", cultivo="SEQUEIRO", hasZoneamento=True,
+    )]
+    zoneamento.consultar_zoneamento.return_value = ResultadoZoneamento(
+        consulta=ConsultaZoneamento(codigo_ibge=3146107, id_cultura=1),
+        janelas=[JanelaPlantio(
+            municipio="Ouro Preto", uf="MG", cultura="MILHO", culturaNomeCompleto="MILHO SEQUEIRO",
+            culturaSafra="não informado", culturaCultivo="SEQUEIRO", culturaClima="Não se aplica",
+            ciclo="GRUPO I", solo="ARGILOSO", diaIni=1, mesIni=11, diaFim=30, mesFim=11,
+            safraIni=2026, safraFim=2027, risco=20, portaria="Portaria de teste",
+        )],
+    )
+    referencias = Mock()
+    referencias.buscar_referencias.return_value = []
+    sdk = Mock()
+    saida = {
+        "resumo": "Planeje a lavoura considerando a chuva sazonal e a janela do município.",
+        "actions": [{"description": "Confirme o solo antes de plantar.", "evidencias": ["usuario"]}],
+        "analise_ph": {"valor_informado": 5.5, "interpretacao": "pH informado de 5,5.",
+                       "orientacao": "Confirme o método de medição.", "evidencias": ["usuario:ph"]},
+        "analise_restricoes": {"texto_informado": "Pouca água disponível.",
+                               "impacto": "A água disponível pode limitar o estabelecimento.",
+                               "orientacao": "Planeje o uso da água.", "evidencias": ["usuario:restricoes"]},
+        "sugestao_rotacao": {"orientacao": "Considere cobertura antes da próxima cultura.",
+                             "probabilidade_estabelecimento_pct": 64,
+                             "justificativa": "Estimativa exploratória baseada na chuva projetada e no manejo informado.",
+                             "evidencias": ["usuario", "previsao:chuva"]},
+    }
+    sdk.interactions.create.return_value = SimpleNamespace(output_text="{}" if falha_gemini else json.dumps(saida))
+    servico = RecomendacaoService(zoneamento, referencias, localizador,
+                                  NasaClimaService(hoje=date(2026, 11, 15)), GeminiClient(sdk))
+    inicio, fim = date(2025, 5, 1), date(2026, 10, 31)
+    with patch("src.backend.services.clima.request_NASA_API", return_value=payload_periodo(inicio, fim)) as nasa:
+        app.dependency_overrides[obter_servico_recomendacao] = lambda: servico
+        try:
+            response = TestClient(app).post("/api/v1/recomendar", json={**ENTRADA, "id_cultura": 1})
+        finally:
+            app.dependency_overrides.clear()
+    assert response.status_code == 200
+    data = response.json()
+    nasa.assert_called_once_with(ENTRADA["latitude"], ENTRADA["longitude"], "20250501", "20261031")
+    zoneamento.consultar_zoneamento.assert_called_once()
+    referencias.buscar_referencias.assert_called_once()
+    contexto = json.loads(sdk.interactions.create.call_args.kwargs["input"].split("\n", 1)[1])
+    assert contexto["dados_informados"]["objetivo"] == "recuperar_solo"
+    assert contexto["resumo_climatico"]["projecao_chuva"]["meses"][1]["precipitacao_estimada_mm"] == 310
+    assert contexto["evidencias_contexto"]["previsao:chuva"] == "/resumo_climatico/projecao_chuva"
+    assert data["resumo_climatico"]["projecao_chuva"]["total_estimado_mm"] == 310
+    assert data["janelas"]
+    assert data["status_ia"] == ("indisponivel" if falha_gemini else "disponivel")
+    if falha_gemini:
+        assert data["explicacao_ia"] is None
+    else:
+        assert data["explicacao_ia"]["sugestao_rotacao"]["probabilidade_estabelecimento_pct"] == 64

@@ -1,9 +1,10 @@
-import { buildPayload, buscarOpcoesCultura, recomendar, buscarLocalizacao, resolverLocalizacao } from "./api.js?v=20261115-chuva-12m-1";
-import { renderCultureOptions, renderResults } from "./results.js?v=20261115-chuva-12m-1";
+import { buildPayload, buscarOpcoesCultura, recomendar, buscarLocalizacao, resolverLocalizacao } from "./api.js?v=20261115-resultados-2";
+import { renderCultureOptions, renderResults } from "./results.js?v=20261115-resultados-2";
 
 const state = {
   lat: -20.3856, lon: -43.5035, regionName: "Ouro Preto, MG", map: null, marker: null,
   submitting: false, locating: false, locationRevision: 0, lastResponse: null, retryConfirmed: false,
+  sensorDemo: false, manualCropValue: null,
 };
 const byId = (id) => document.getElementById(id);
 const show = (id, visible) => byId(id).classList.toggle("hidden", !visible);
@@ -127,6 +128,21 @@ function updatePhBadge() {
   });
 }
 
+function setSensorMode(demo) {
+  if (demo && !state.sensorDemo) state.manualCropValue = byId("cropSelect").value;
+  if (!demo && state.sensorDemo && state.manualCropValue !== null) {
+    byId("cropSelect").value = state.manualCropValue;
+    byId("cropSelect").dispatchEvent(new Event("change"));
+  }
+  state.sensorDemo = demo;
+  show("sensorDemoPanel", demo);
+  show("manualPersonalization", !demo);
+  for (const [id, selected] of [["btnManualSoil", !demo], ["btnSensorDemo", demo]]) {
+    byId(id).classList.toggle("is-selected", selected);
+    byId(id).setAttribute("aria-pressed", String(selected));
+  }
+}
+
 function chooseCulture(option) {
   const select = byId("cropSelect");
   let entry = [...select.options].find((item) => item.dataset.culturaId === String(option.id));
@@ -150,13 +166,20 @@ async function submitForm(event, cultureConfirmed = false) {
   let payload;
   try {
     const formData = new FormData(byId("agroWizardForm"));
+    if (state.sensorDemo) {
+      for (const [key, value] of Object.entries({
+        cultura_desejada: "milho", tipo_solo: "textura_media", ph: "6.2",
+        forma_irrigacao: "sem_irrigacao", historico_area: "monocultura_pousio",
+        objetivo: "recuperar_solo", restricoes: "", modo_demonstracao: "true",
+      })) formData.set(key, value);
+    }
     const selected = byId("cropSelect").selectedOptions[0];
-    if (selected?.dataset.culturaId) {
+    if (selected?.dataset.culturaId && (!state.sensorDemo || cultureConfirmed)) {
       formData.set("id_cultura", selected.dataset.culturaId);
       formData.set("cultura_desejada", selected.dataset.culturaNome);
     }
     const classe = byId("zarcSoilClass").value;
-    if (classe) {
+    if (classe && !state.sensorDemo) {
       formData.set("tipo_solo_informado", formData.get("tipo_solo"));
       formData.set("tipo_solo", classe);
     }
@@ -183,6 +206,10 @@ async function submitForm(event, cultureConfirmed = false) {
         throw new Error("Confira as opções de cultura e tente novamente.");
       }
       byId("cultureGateRegion").textContent = `${catalog.municipio.nome}, ${catalog.municipio.uf}`;
+      byId("cultureGateTitle").textContent = state.sensorDemo ? "Escolha a opção para o cenário teórico" : "Escolha a opção de cultura";
+      byId("cultureGateHelp").textContent = state.sensorDemo
+        ? "Escolha a safra e o cultivo do cenário demonstrativo."
+        : "Escolha a safra e o sistema de cultivo que correspondem à sua lavoura.";
       renderCultureOptions(catalog.opcoes, chooseCulture);
       feedback("cultureGateFeedback", catalog.opcoes.length ? "" : "Revise a cultura ou a forma de irrigação para continuar.");
       show("cultureGate", true);
@@ -270,6 +297,8 @@ function init() {
   byId("cropSelect").addEventListener("change", () => document.querySelectorAll(".crop-pill").forEach((button) => {
     button.classList.toggle("active-pill", button.dataset.crop === byId("cropSelect").value);
   }));
+  byId("btnManualSoil").addEventListener("click", () => setSensorMode(false));
+  byId("btnSensorDemo").addEventListener("click", () => setSensorMode(true));
   byId("soilPh").addEventListener("input", updatePhBadge);
   document.querySelectorAll(".ph-preset-btn").forEach((button) => button.addEventListener("click", () => {
     byId("soilPh").value = button.dataset.ph;

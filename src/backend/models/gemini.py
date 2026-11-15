@@ -24,12 +24,21 @@ class AnaliseRestricoesGemini(BaseModel):
     evidencias: list[str] = Field(min_length=1, max_length=20)
 
 
+class SugestaoRotacaoGemini(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, allow_inf_nan=False)
+    orientacao: str = Field(min_length=1, max_length=450)
+    probabilidade_estabelecimento_pct: float | None = Field(default=None, ge=0, le=100)
+    justificativa: str = Field(min_length=1, max_length=350)
+    evidencias: list[str] = Field(min_length=1, max_length=20)
+
+
 class StructuredGeminiOutput(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     resumo: str = Field(min_length=1, max_length=360, description="Situação da área e principal condição, em até duas frases")
     actions: list[AcoesRecomendadasGemini] = Field(max_length=3)
     analise_ph: AnalisePhGemini
     analise_restricoes: AnaliseRestricoesGemini | None = Field(description="Obrigatória quando há restrições; null caso contrário")
+    sugestao_rotacao: SugestaoRotacaoGemini
 
 
 class OrientacaoIAError(RuntimeError):

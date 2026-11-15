@@ -1,5 +1,9 @@
 """Adaptador Gemini: recebe contexto pronto, sem consultar NASA ou Embrapa."""
 import json
+import logging
+import re
+
+from pydantic import ValidationError
 
 from ..models.gemini import (
     AcoesRecomendadasGemini, OrientacaoIAError, StructuredGeminiOutput,
@@ -8,6 +12,9 @@ from ..models.gemini import (
 SYSTEM_PROMPT = """
 Responda em português do Brasil, com linguagem simples e concisa.
 Sua resposta será o conteúdo principal da tela do agricultor.
+Se dados_informados.modo_demonstracao for true, trate solo, pH, histórico,
+irrigação, objetivo e restrições como hipóteses de tese. Identifique o resumo
+como cenário teórico e não apresente orientação como diagnóstico da propriedade.
 Depois do histórico climático da NASA, o agricultor verá seu resumo e as ações.
 Sintetize em até duas frases e 360 caracteres o que os dados informados, o histórico
 climático, as referências da Embrapa e as condições do ZARC indicam em conjunto,
@@ -46,10 +53,24 @@ for ambíguo, faça uma pergunta concreta. Não invente orçamento, maquinário,
 declarou não possuir nem resuma a análise a uma avaliação técnica. Se não houver restrições,
 retorne analise_restricoes como null. As ações devem ser coerentes com ambas
 as análises. Cite usuario:ph e, quando houver restrições, usuario:restricoes.
+Inclua sugestao_rotacao com uma orientação breve de sucessão ou cobertura,
+coerente com cultura, histórico, restrições, ZARC e projeção de chuva quando
+resumo_climatico.projecao_chuva ou previsao_chuva estiver presente. Diferencie
+projeção futura do histórico NASA.
+Não apresente uma espécie como validada se as fontes não sustentarem isso.
+"Sucesso" significa estabelecimento das culturas, não lucro ou produtividade.
+Quando houver estimativa_estabelecimento calibrada, copie exatamente sua
+probabilidade e cite modelo:estabelecimento. Sem ela, mas com projeção de chuva,
+gere uma porcentagem exploratória de 0 a 100 para o estabelecimento sob a
+rotação sugerida, citando previsao:chuva e explicando brevemente as hipóteses
+e incertezas. Não a apresente como probabilidade validada ou garantia.
+Sem projeção nem estimativa calibrada, retorne null e explique o motivo.
 O mapa evidencias_contexto associa IDs a caminhos JSON dos dados fornecidos.
 Cada ação deve citar em evidencias somente IDs existentes nesse mapa.
 Não apresente a interpretação gerada como validação técnica da propriedade.
 """
+
+logger = logging.getLogger(__name__)
 
 
 class GeminiClient:
@@ -85,9 +106,31 @@ class GeminiClient:
                 analises.append(analise_restricoes)
             elif analise_restricoes is not None:
                 raise ValueError("Foram inventadas restrições")
+            rotacao = resultado.sugestao_rotacao
+            analises.append(rotacao)
+            percentual = rotacao.probabilidade_estabelecimento_pct
+            fonte_percentual = contexto.get("estimativa_estabelecimento")
+            resumo_climatico = contexto.get("resumo_climatico") or {}
+            previsao = contexto.get("previsao_chuva") or resumo_climatico.get("projecao_chuva")
+            if percentual is not None:
+                if fonte_percentual is not None:
+                    if (percentual != fonte_percentual["probabilidade_pct"]
+                            or "modelo:estabelecimento" not in rotacao.evidencias):
+                        raise ValueError("Probabilidade calibrada não corresponde à fonte")
+                elif not previsao:
+                    raise ValueError("Estimativa exploratória sem projeção de chuva")
+            if percentual is None and re.search(r"\b\d{1,3}(?:[,.]\d+)?\s*(?:%|por cento)(?!\w)", rotacao.orientacao + " " + rotacao.justificativa):
+                raise ValueError("Percentual de estabelecimento fora do campo validado")
             if any(id_ not in permitidas for item in analises for id_ in item.evidencias):
                 raise ValueError("Evidência desconhecida")
             return resultado
         except Exception as exc:
             # Erros do SDK e validação não expõem prompts, chaves ou dados ao cliente.
+            if isinstance(exc, ValidationError):
+                campos = [".".join(map(str, erro["loc"])) for erro in exc.errors()]
+                logger.warning("Falha na validação Gemini nos campos: %s", ", ".join(campos))
+            elif isinstance(exc, ValueError):
+                logger.warning("Falha na validação Gemini: %s", exc)
+            else:
+                logger.warning("Falha na chamada Gemini: %s", type(exc).__name__)
             raise OrientacaoIAError("Orientação personalizada indisponível.") from exc
