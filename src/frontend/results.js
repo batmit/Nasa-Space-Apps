@@ -242,4 +242,31 @@ export function renderClimate(climate, available) {
   }
   table.append(head, body);
   monthly.append(table);
+  const projection = climate.projecao_chuva;
+  if (projection && Array.isArray(projection.meses) && projection.meses.length) {
+    const card = element("div", "", "result-card");
+    card.append(element("h4", "Chuva estimada nos próximos 12 meses", "text-sm font-extrabold"),
+      element("p", format(projection.total_estimado_mm, "mm"), "window-period"));
+    metrics.append(card);
+    monthly.append(element("h3", "Projeção de chuva — próximos 12 meses", "climate-chart-title"),
+      element("p", projection.aviso || "Estimativa sazonal baseada no histórico recente.", "climate-chart-help"));
+    const projectedTable = element("table", "", "climate-table");
+    const projectedHead = element("thead", "");
+    const projectedHeader = element("tr", "");
+    for (const label of ["Mês/ano", "Chuva estimada (mm)", "Meses históricos utilizados"]) {
+      const th = element("th", label); th.scope = "col"; projectedHeader.append(th);
+    }
+    projectedHead.append(projectedHeader);
+    const projectedBody = element("tbody", "");
+    for (const month of projection.meses) {
+      const row = element("tr", "");
+      for (const value of [`${names[month.mes - 1] || month.mes}/${month.ano}`,
+        format(month.precipitacao_estimada_mm, ""), month.meses_historicos_utilizados]) {
+        row.append(element("td", value));
+      }
+      projectedBody.append(row);
+    }
+    projectedTable.append(projectedHead, projectedBody);
+    monthly.append(projectedTable);
+  }
 }

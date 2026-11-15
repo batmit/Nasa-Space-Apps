@@ -15,6 +15,23 @@ class MesClimatico(BaseModel):
     radiacao_media_mj_m2_dia: float | None = None
 
 
+class MesProjetado(BaseModel):
+    ano: int
+    mes: int = Field(ge=1, le=12)
+    precipitacao_estimada_mm: float | None = None
+    meses_historicos_utilizados: int = Field(ge=0)
+
+
+class ProjecaoChuva(BaseModel):
+    metodo: Literal["media_por_mes_do_ano"] = "media_por_mes_do_ano"
+    meses: list[MesProjetado]
+    total_estimado_mm: float | None = None
+    aviso: str = (
+        "Estimativa sazonal baseada nos últimos 18 meses, assumindo repetição do padrão de chuva. "
+        "Não é uma previsão meteorológica validada."
+    )
+
+
 class ResumoClimatico(BaseModel):
     fonte: Literal["NASA POWER"] = "NASA POWER"
     data_inicio: date
@@ -31,6 +48,7 @@ class ResumoClimatico(BaseModel):
     maior_sequencia_dias_sem_chuva: int | None = None
     criterio_dia_sem_chuva_mm: float = 1.0
     meses: list[MesClimatico]
+    projecao_chuva: ProjecaoChuva | None = None
     avisos: list[str] = Field(default_factory=list)
 
 
