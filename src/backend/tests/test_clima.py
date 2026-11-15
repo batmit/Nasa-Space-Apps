@@ -26,9 +26,8 @@ ENTRADA = dict(
 )
 
 
-@pytest.fixture
-def payload():
-    dias = [INICIO + timedelta(days=i) for i in range((FIM - INICIO).days + 1)]
+def payload_periodo(inicio, fim):
+    dias = [inicio + timedelta(days=i) for i in range((fim - inicio).days + 1)]
     values = {
         "T2M": ("C", 20.0), "T2M_MIN": ("C", 10.0), "T2M_MAX": ("C", 30.0),
         "RH2M": ("%", 70.0), "ALLSKY_SFC_SW_DWN": ("kW-hr/m^2/day", 4.0),
@@ -45,6 +44,11 @@ def payload():
         if dia.month == 1:
             data["properties"]["parameter"]["PRECTOTCORR"][dia.strftime("%Y%m%d")] = 10.0
     return data
+
+
+@pytest.fixture
+def payload():
+    return payload_periodo(INICIO, FIM)
 
 
 def test_resumo_soma_chuva_por_ano_e_converte_radiacao(payload):
@@ -99,10 +103,41 @@ def test_umidade_invalida_nao_e_exibida_como_dado_valido(payload):
     assert resumir_clima(payload, INICIO, FIM).umidade_relativa_ar_pct is None
 
 
-def test_datas_da_nasa_sao_definidas_sem_mudar_entrada_do_produtor(payload):
-    with patch("src.backend.services.clima.request_NASA_API", return_value=payload) as request:
-        NasaClimaService(hoje=date(2026, 11, 14)).obter_resumo(-20, -43)
-    request.assert_called_once_with(-20, -43, "20230101", "20251231")
+@pytest.mark.parametrize("hoje,inicio,fim", [
+    (date(2026, 11, 15), date(2025, 5, 1), date(2026, 10, 31)),
+    (date(2026, 11, 1), date(2025, 5, 1), date(2026, 10, 31)),
+    (date(2027, 1, 1), date(2025, 7, 1), date(2026, 12, 31)),
+    (date(2024, 3, 1), date(2022, 9, 1), date(2024, 2, 29)),
+])
+def test_nasa_consulta_dezoito_meses_completos_sem_incluir_mes_atual(hoje, inicio, fim):
+    with patch("src.backend.services.clima.request_NASA_API", return_value=payload_periodo(inicio, fim)) as request:
+        resumo = NasaClimaService(hoje=hoje).obter_resumo(-20, -43)
+    request.assert_called_once_with(-20, -43, inicio.strftime("%Y%m%d"), fim.strftime("%Y%m%d"))
+    assert resumo.data_inicio == inicio
+    assert resumo.data_fim == fim
+    assert resumo.dias_esperados == (fim - inicio).days + 1
+    assert resumo.cobertura_pct["PRECTOTCORR"] == 100
+    assert len(resumo.meses) == 12
+    assert sum(mes.anos_chuva_completos for mes in resumo.meses) == 18
+    assert {mes.anos_chuva_completos for mes in resumo.meses} == {1, 2}
+    assert any(f"{inicio:%d/%m/%Y} a {fim:%d/%m/%Y}" in aviso for aviso in resumo.avisos)
+    assert not any("três anos" in aviso for aviso in resumo.avisos)
+
+
+def test_dezoito_meses_nao_transformam_chuva_parcial_em_media_anual():
+    inicio, fim = date(2025, 5, 1), date(2026, 10, 31)
+    resumo = resumir_clima(payload_periodo(inicio, fim), inicio, fim)
+    assert resumo.anos_chuva_completos == 0
+    assert resumo.precipitacao_media_anual_mm is None
+    assert any("média anual não foi calculada" in aviso for aviso in resumo.avisos)
+    assert any("menos de duas observações" in aviso for aviso in resumo.avisos)
+
+
+def test_dezoito_meses_preservam_total_do_ano_civil_completo_quando_existente():
+    inicio, fim = date(2025, 7, 1), date(2026, 12, 31)
+    resumo = resumir_clima(payload_periodo(inicio, fim), inicio, fim)
+    assert resumo.anos_chuva_completos == 1
+    assert resumo.precipitacao_media_anual_mm == 310
 
 
 def test_falha_de_cache_da_nasa_e_tratada_como_fonte_indisponivel():

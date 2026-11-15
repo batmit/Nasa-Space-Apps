@@ -70,6 +70,19 @@ def test_seasonality_requires_twelve_months_with_two_complete_years(farmer):
     assert "planejamento_climatico" not in {rule.tema for rule in rules}
 
 
+def test_eighteen_month_window_does_not_imply_two_observations_for_every_month(farmer):
+    summary = climate(complete_years=1)
+    summary.data_inicio = date(2025, 5, 1)
+    summary.data_fim = date(2026, 10, 31)
+    summary.dias_esperados = (summary.data_fim - summary.data_inicio).days + 1
+    for month in summary.meses:
+        if 5 <= month.mes <= 10:
+            month.anos_chuva_completos = 2
+    rules = gerar_orientacoes(farmer, recommendation(farmer, summary))
+    assert "planejamento_climatico" not in {rule.tema for rule in rules}
+    assert "conservacao_agua" in {rule.tema for rule in rules}
+
+
 @pytest.mark.parametrize("goal,expected", [
     ("recuperar_solo", ["cobertura_solo"]),
     ("conservar_agua", ["cobertura_solo"]),
