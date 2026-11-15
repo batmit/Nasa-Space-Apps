@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261115-cultura-primeiro-1" />
+  <link rel="stylesheet" href="styles.css?v=20261115-gemini-dados-1" />
 </head>
 <body class="bg-[#F6F8F5] text-slate-900 antialiased h-screen overflow-hidden flex flex-col">
 
@@ -444,6 +444,10 @@
             <div id="aiGuidance" class="hidden ai-primary">
               <p id="aiSummary" class="result-next-step"></p>
               <ol id="aiActions" class="ai-action-list"></ol>
+              <details id="aiPersonalizacao" class="result-more guidance-disclosure mt-4">
+                <summary>Como pH e restrições foram considerados</summary>
+                <div id="aiPersonalizacaoConteudo" class="ai-analysis-list"></div>
+              </details>
             </div>
             <div id="fallbackGuidance" class="hidden result-fallback">
               <div id="recommendations" class="guidance-list"></div>
@@ -506,6 +510,6 @@
 
   </form>
 
-  <script type="module" src="app.js?v=20261115-cultura-primeiro-1"></script>
+  <script type="module" src="app.js?v=20261115-gemini-dados-1"></script>
 </body>
 </html>

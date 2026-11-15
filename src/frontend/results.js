@@ -105,8 +105,11 @@ export function renderResults(data, onChooseCulture, onReviewSoil) {
 export function renderGemini(data) {
   const summary = document.getElementById("aiSummary");
   const actions = document.getElementById("aiActions");
+  const analyses = document.getElementById("aiPersonalizacaoConteudo");
   summary.textContent = "";
   actions.replaceChildren();
+  analyses.replaceChildren();
+  document.getElementById("aiPersonalizacao").open = false;
   const output = data.explicacao_ia;
   const available = data.status_ia === "disponivel" && typeof output?.resumo === "string"
     && Array.isArray(output.actions);
@@ -118,7 +121,22 @@ export function renderGemini(data) {
   if (!available) return;
   document.getElementById("diagTitle").textContent = "Seu próximo passo";
   summary.textContent = output.resumo;
+  const addAnalysis = (title, texts) => {
+    const section = element("section", "", "ai-analysis-item");
+    section.append(element("h4", title, "guidance-title"));
+    for (const value of texts) section.append(element("p", value, "guidance-text"));
+    analyses.append(section);
+  };
+  if (output.analise_ph) addAnalysis(`pH informado: ${output.analise_ph.valor_informado}`, [
+    output.analise_ph.interpretacao, output.analise_ph.orientacao,
+  ]);
+  if (output.analise_restricoes) addAnalysis("Restrições informadas", [
+    output.analise_restricoes.texto_informado,
+    output.analise_restricoes.impacto, output.analise_restricoes.orientacao,
+  ]);
   const evidenceLabel = (id) => id === "usuario" ? "Dados informados"
+    : id === "usuario:ph" ? "pH informado"
+    : id === "usuario:restricoes" ? "Restrições informadas"
     : id === "nasa:resumo" ? "Histórico NASA"
     : id.startsWith("zarc:condicional:") ? "Período ZARC condicional"
     : id.startsWith("zarc:janela:") ? "Período ZARC compatível"

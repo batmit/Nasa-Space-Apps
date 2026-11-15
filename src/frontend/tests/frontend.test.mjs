@@ -308,7 +308,9 @@ test("Gemini aparece como interpretação, preserva evidências e limpa dados an
   context.after(() => { delete globalThis.document; });
   renderGemini({ status_ia: "disponivel", explicacao_ia: {
     resumo: "<img src=x onerror=alert(1)>", actions: [{ description: "Confirme a classe AD.",
-      evidencias: ["usuario", "zarc:condicional:0"] }],
+      evidencias: ["usuario:ph", "usuario:restricoes", "zarc:condicional:0"] }],
+    analise_ph: { valor_informado: 5.5, interpretacao: "pH ácido", orientacao: "Avalie correção." },
+    analise_restricoes: { texto_informado: "Pouca água", impacto: "Limita irrigação", orientacao: "Planeje a água." },
   } });
   assert.equal(nodes.get("aiGuidance").hidden, false);
   assert.equal(nodes.get("fallbackGuidance").hidden, true);
@@ -319,10 +321,14 @@ test("Gemini aparece como interpretação, preserva evidências e limpa dados an
   const action = nodes.get("aiActions").children[0];
   assert.equal(action.children[0].textContent, "Confirme a classe AD.");
   assert.match(action.children[1].children[1].textContent, /condicional/);
+  assert.equal(nodes.get("aiPersonalizacaoConteudo").children.length, 2);
+  assert.match(nodes.get("aiPersonalizacaoConteudo").children[0].children[0].textContent, /5.5/);
+  assert.equal(nodes.get("aiPersonalizacaoConteudo").children[1].children[1].textContent, "Pouca água");
   renderGemini({ status_ia: "indisponivel", explicacao_ia: null });
   assert.equal(nodes.get("aiGuidance").hidden, true);
   assert.equal(nodes.get("aiSummary").textContent, "");
   assert.equal(nodes.get("aiActions").children.length, 0);
+  assert.equal(nodes.get("aiPersonalizacaoConteudo").children.length, 0);
   assert.equal(nodes.get("fallbackGuidance").hidden, false);
   assert.equal(nodes.get("diagText").hidden, false);
   assert.equal(nodes.get("aiAttribution").hidden, true);

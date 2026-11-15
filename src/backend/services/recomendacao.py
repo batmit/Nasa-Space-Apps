@@ -24,7 +24,9 @@ def montar_contexto_ia(resposta: RecomendacaoResponse) -> dict:
         mode="json", exclude={"explicacao_ia", "status_ia", "janelas_confirmadas"},
     )
     # JSON pointers evitam duplicar os dados e consumir tokens desnecessários.
-    evidencias = {"usuario": "/dados_informados"}
+    evidencias = {"usuario": "/dados_informados", "usuario:ph": "/dados_informados/ph"}
+    if resposta.dados_informados.restricoes:
+        evidencias["usuario:restricoes"] = "/dados_informados/restricoes"
     if resposta.resumo_climatico is not None:
         evidencias["nasa:resumo"] = "/resumo_climatico"
     for i in range(len(resposta.janelas)):
@@ -87,10 +89,6 @@ class RecomendacaoService:
                 f"pelas coordenadas ({municipio.nome}, {municipio.uf}). Confira o ponto no mapa; "
                 "as consultas utilizam as coordenadas."
             )
-        if dados.restricoes:
-            resposta.pendencias.append(
-                "As restrições em texto foram registradas, mas sua compatibilidade com as opções exige avaliação técnica."
-            )
         if self._clima is not None:
             try:
                 resposta.resumo_climatico = self._clima.obter_resumo(dados.latitude, dados.longitude)
@@ -117,6 +115,10 @@ class RecomendacaoService:
                 resposta.avisos.append("Orientação por IA indisponível; os resultados das fontes foram preservados.")
             else:
                 resposta.status_ia = "disponivel"
+        if dados.restricoes and resposta.explicacao_ia is None:
+            resposta.pendencias.append(
+                "Confira as restrições informadas com assistência técnica antes de seguir orientações gerais."
+            )
         return resposta
 
     def _adicionar_referencias(self, dados: DadosAgricultor, resposta: RecomendacaoResponse) -> None:

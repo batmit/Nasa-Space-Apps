@@ -53,6 +53,8 @@ body {
 .ai-action-list { list-style: none; counter-reset: action; display: grid; gap: .65rem; padding: 0; margin-top: 1.5rem; color: #273e32; font-size: .91rem; line-height: 1.55; }
 .ai-action-item { counter-increment: action; position: relative; padding: .8rem 1rem .8rem 3.15rem; border-radius: .7rem; background: #f3f7f3; min-height: 3.1rem; }
 .ai-action-item::before { content: counter(action); position: absolute; left: .9rem; top: .82rem; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: #dceee1; color: #34694a; display: grid; place-items: center; font-weight: 800; font-size: .75rem; }
+.ai-analysis-list { display: grid; gap: 1rem; margin-top: 1rem; }
+.ai-analysis-item + .ai-analysis-item { border-top: 1px solid #dce8df; padding-top: 1rem; }
 @media (max-width: 480px) { .result-stack .result-panel { padding: 1.2rem; border-radius: 1rem; } .result-toolbar { align-items: start; } }
 .result-card { padding: 1rem; border: 1px solid #cbd5e1; border-radius: 1rem; overflow-wrap: anywhere; }
 .conditional-window { border-color: #f59e0b; background: #fffbeb; }

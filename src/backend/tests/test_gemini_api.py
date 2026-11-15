@@ -17,6 +17,25 @@ from src.backend.services.recomendacao import RecomendacaoService, montar_contex
 from src.backend.modules.routes import obter_orientador_ia, recomendar
 
 
+def saida_personalizada():
+    return {
+        "resumo": "Considere as restrições e confirme a interpretação do pH para soja.",
+        "actions": [],
+        "analise_ph": {
+            "valor_informado": 6.2,
+            "interpretacao": "pH 6,2 informado; o método de medição não foi informado.",
+            "orientacao": "Confirme o método e compare o resultado à referência da cultura.",
+            "evidencias": ["usuario:ph"],
+        },
+        "analise_restricoes": {
+            "texto_informado": "Não tenho maquinário para hortaliças/cenoura.",
+            "impacto": "A opção de cenoura depende de equipamento que o agricultor não possui.",
+            "orientacao": "Planeje somente opções compatíveis com o equipamento disponível.",
+            "evidencias": ["usuario:restricoes"],
+        },
+    }
+
+
 @pytest.fixture
 def dados():
     return DadosAgricultor(
@@ -59,7 +78,7 @@ def test_contexto_preserva_todos_campos_e_fontes_sem_alterar_resposta(resposta, 
 def test_adapter_envia_json_schema_e_retorna_saida_validada(resposta):
     client = Mock()
     client.interactions.create.return_value = SimpleNamespace(output_text=json.dumps({
-        "resumo": "Confira as limitações.", "actions": [
+        **saida_personalizada(), "resumo": "Confira as limitações.", "actions": [
             {"description": "Confira o manejo.", "evidencias": ["embrapa:referencia:0"]},
         ],
     }))
@@ -68,7 +87,10 @@ def test_adapter_envia_json_schema_e_retorna_saida_validada(resposta):
     params = client.interactions.create.call_args.kwargs
     enviado = json.loads(params["input"].split("\n", 1)[1])
     assert enviado["dados_informados"]["ph"] == 6.2
+    assert enviado["dados_informados"]["objetivo"] == resposta.dados_informados.objetivo
     assert enviado["dados_informados"]["restricoes"] == resposta.dados_informados.restricoes
+    assert enviado["evidencias_contexto"]["usuario:ph"] == "/dados_informados/ph"
+    assert enviado["evidencias_contexto"]["usuario:restricoes"] == "/dados_informados/restricoes"
     assert params["response_format"]["schema"] == StructuredGeminiOutput.model_json_schema()
     assert params["store"] is False
 
@@ -99,7 +121,7 @@ def test_fluxo_coleta_fontes_antes_da_ia_e_preserva_fallback(dados, resposta, fa
     if falha:
         ia.gerar.side_effect = OrientacaoIAError()
     else:
-        ia.gerar.return_value = StructuredGeminiOutput(resumo="Orientação personalizada", actions=[])
+        ia.gerar.return_value = StructuredGeminiOutput(**saida_personalizada())
     servico = RecomendacaoService(None, referencias, localizador, clima, ia)
     resultado = recomendar(dados, servico).model_dump(mode="json")
     contexto = ia.gerar.call_args.args[0]
@@ -108,6 +130,7 @@ def test_fluxo_coleta_fontes_antes_da_ia_e_preserva_fallback(dados, resposta, fa
     assert contexto["pendencias"]
     assert contexto["status_zarc"] == "nao_configurado"
     assert resultado["restricoes_avaliadas"] is False
+    assert any("restrições informadas" in p.lower() for p in resultado["pendencias"]) == falha
     assert resultado["status_ia"] == ("indisponivel" if falha else "disponivel")
     assert resultado["resumo_climatico"] is not None
     assert (resultado["explicacao_ia"] is None) == falha
@@ -131,18 +154,21 @@ def test_contexto_sem_fontes_nao_fabrica_evidencias(resposta):
     contexto = montar_contexto_ia(resposta)
     assert contexto["resumo_climatico"] is None
     assert contexto["referencias"] == []
-    assert contexto["evidencias_contexto"] == {"usuario": "/dados_informados"}
+    assert contexto["evidencias_contexto"] == {
+        "usuario": "/dados_informados", "usuario:ph": "/dados_informados/ph",
+        "usuario:restricoes": "/dados_informados/restricoes",
+    }
 
 
-def test_sdk_instalado_aceita_parametros_sem_rede():
+def test_sdk_instalado_aceita_parametros_sem_rede(resposta):
     from google import genai
     client = genai.Client(api_key="teste")
     try:
         with patch.object(client.interactions, "_send_create_once", return_value=Mock(
-            output_text='{"resumo":"Teste","actions":[]}',
+            output_text=json.dumps(saida_personalizada()),
         )) as enviar:
-            resultado = GeminiClient(client).gerar({"evidencias_contexto": {}})
-        assert resultado.resumo == "Teste"
+            resultado = GeminiClient(client).gerar(montar_contexto_ia(resposta))
+        assert resultado.analise_ph.valor_informado == 6.2
         enviar.assert_called_once()
     finally:
         client.close()
@@ -153,14 +179,53 @@ def test_sdk_instalado_aceita_parametros_sem_rede():
 ])
 def test_saida_personalizada_rejeita_textos_e_listas_extensos(resumo, descricao, quantidade):
     with pytest.raises(ValidationError):
-        StructuredGeminiOutput(resumo=resumo, actions=[
+        StructuredGeminiOutput(**dict(saida_personalizada(), resumo=resumo, actions=[
             {"description": descricao, "evidencias": ["usuario"]} for _ in range(quantidade)
-        ])
+        ]))
 
 
 def test_saida_curta_preserva_acao_e_evidencias_no_limite():
-    resultado = StructuredGeminiOutput(resumo="r" * 360, actions=[
+    resultado = StructuredGeminiOutput(**dict(saida_personalizada(), resumo="r" * 360, actions=[
         {"description": "a" * 220, "evidencias": ["usuario"]} for _ in range(3)
-    ])
+    ]))
     assert len(resultado.actions) == 3
     assert resultado.actions[0].evidencias == ["usuario"]
+
+
+@pytest.mark.parametrize("caso", [
+    "sem_ph", "ph_trocado", "sem_restricoes", "restricoes_trocadas",
+    "evidencia_ph", "evidencia_restricoes", "evidencia_inventada",
+])
+def test_rejeita_analise_que_omite_ou_troca_dados_do_produtor(resposta, caso):
+    output = saida_personalizada()
+    if caso == "sem_ph":
+        del output["analise_ph"]
+    elif caso == "ph_trocado":
+        output["analise_ph"]["valor_informado"] = 4.1
+    elif caso == "sem_restricoes":
+        output["analise_restricoes"] = None
+    elif caso == "restricoes_trocadas":
+        output["analise_restricoes"]["texto_informado"] = "Tenho todos os equipamentos."
+    elif caso == "evidencia_ph":
+        output["analise_ph"]["evidencias"] = ["usuario"]
+    elif caso == "evidencia_restricoes":
+        output["analise_restricoes"]["evidencias"] = ["usuario"]
+    else:
+        output["analise_restricoes"]["evidencias"].append("inventada")
+    client = Mock()
+    client.interactions.create.return_value = SimpleNamespace(output_text=json.dumps(output))
+    with pytest.raises(OrientacaoIAError):
+        GeminiClient(client).gerar(montar_contexto_ia(resposta))
+
+
+def test_sem_restricoes_exige_analise_nula(resposta):
+    resposta.dados_informados.restricoes = ""
+    output = saida_personalizada()
+    output["analise_restricoes"] = None
+    client = Mock()
+    client.interactions.create.return_value = SimpleNamespace(output_text=json.dumps(output))
+    assert GeminiClient(client).gerar(montar_contexto_ia(resposta)).analise_restricoes is None
+    output["analise_restricoes"] = saida_personalizada()["analise_restricoes"]
+    client.interactions.create.return_value.output_text = json.dumps(output)
+    with pytest.raises(OrientacaoIAError):
+        GeminiClient(client).gerar(montar_contexto_ia(resposta))

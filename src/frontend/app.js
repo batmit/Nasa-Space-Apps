@@ -1,5 +1,5 @@
-import { buildPayload, buscarOpcoesCultura, recomendar, buscarLocalizacao, resolverLocalizacao } from "./api.js?v=20261115-cultura-primeiro-1";
-import { renderCultureOptions, renderResults } from "./results.js?v=20261115-cultura-primeiro-1";
+import { buildPayload, buscarOpcoesCultura, recomendar, buscarLocalizacao, resolverLocalizacao } from "./api.js?v=20261115-gemini-dados-1";
+import { renderCultureOptions, renderResults } from "./results.js?v=20261115-gemini-dados-1";
 
 const state = {
   lat: -20.3856, lon: -43.5035, regionName: "Ouro Preto, MG", map: null, marker: null,
