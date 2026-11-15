@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from src.backend.integration.gemini_api import GeminiClient
 from src.backend.models.gemini import OrientacaoIAError, StructuredGeminiOutput
@@ -145,3 +146,21 @@ def test_sdk_instalado_aceita_parametros_sem_rede():
         enviar.assert_called_once()
     finally:
         client.close()
+
+
+@pytest.mark.parametrize("resumo,descricao,quantidade", [
+    ("r" * 361, "Ação", 1), ("Resumo", "a" * 221, 1), ("Resumo", "Ação", 4),
+])
+def test_saida_personalizada_rejeita_textos_e_listas_extensos(resumo, descricao, quantidade):
+    with pytest.raises(ValidationError):
+        StructuredGeminiOutput(resumo=resumo, actions=[
+            {"description": descricao, "evidencias": ["usuario"]} for _ in range(quantidade)
+        ])
+
+
+def test_saida_curta_preserva_acao_e_evidencias_no_limite():
+    resultado = StructuredGeminiOutput(resumo="r" * 360, actions=[
+        {"description": "a" * 220, "evidencias": ["usuario"]} for _ in range(3)
+    ])
+    assert len(resultado.actions) == 3
+    assert resultado.actions[0].evidencias == ["usuario"]

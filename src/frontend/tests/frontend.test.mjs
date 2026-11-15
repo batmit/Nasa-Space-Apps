@@ -280,7 +280,9 @@ test("Gemini aparece como interpretação, preserva evidências e limpa dados an
       evidencias: ["usuario", "zarc:condicional:0"] }],
   } });
   assert.equal(nodes.get("aiGuidance").hidden, false);
-  assert.equal(nodes.get("aiGuidance").open, false);
+  assert.equal(nodes.get("fallbackGuidance").hidden, true);
+  assert.equal(nodes.get("diagText").hidden, true);
+  assert.equal(nodes.get("diagTitle").textContent, "Sua orientação personalizada");
   assert.equal(nodes.get("aiSummary").textContent, "<img src=x onerror=alert(1)>");
   const action = nodes.get("aiActions").children[0];
   assert.equal(action.children[0].textContent, "Confirme a classe AD.");
@@ -290,6 +292,8 @@ test("Gemini aparece como interpretação, preserva evidências e limpa dados an
   assert.equal(nodes.get("aiUnavailable").hidden, false);
   assert.equal(nodes.get("aiSummary").textContent, "");
   assert.equal(nodes.get("aiActions").children.length, 0);
+  assert.equal(nodes.get("fallbackGuidance").hidden, false);
+  assert.equal(nodes.get("diagText").hidden, false);
   renderGemini({ status_ia: "nao_configurado" });
   assert.equal(nodes.get("aiUnavailable").hidden, true);
   renderGemini({ status_ia: "disponivel", explicacao_ia: {} });

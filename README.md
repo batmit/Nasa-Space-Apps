@@ -297,9 +297,11 @@ no fluxo existente; a IA recebe os indicadores calculados, não a série diária
 
 A resposta de `/api/v1/recomendar` inclui `explicacao_ia` (`resumo`, `actions`)
 e `status_ia`: `nao_configurado`, `disponivel` ou `indisponivel`. A interface
-mostra a explicação em “Interpretação personalizada · Gemini”, um bloco
-recolhível na seção de manejo, preservando as orientações existentes. Sem chave,
-esse bloco fica oculto; em falhas, a tela informa a indisponibilidade. A explicação
+mostra a explicação como conteúdo principal em “Sua orientação personalizada”:
+um resumo de até 360 caracteres e até três ações de até 220 caracteres cada.
+As orientações gerais aparecem apenas quando a personalização não está disponível.
+As pendências ZARC continuam acessíveis e os dados técnicos ficam recolhidos.
+Sem chave, a tela usa as orientações gerais; em falhas, informa a indisponibilidade. A explicação
 também permanece no JSON exportado. Cada ação cita IDs de `evidencias_contexto`; IDs desconhecidos
 invalidam a geração. Essa checagem não comprova a correção agronômica do texto.
 

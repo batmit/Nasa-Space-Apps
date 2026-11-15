@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261114-gemini-5" />
+  <link rel="stylesheet" href="styles.css?v=20261114-personalizado-6" />
 </head>
 <body class="bg-[#F6F8F5] text-slate-900 antialiased h-screen overflow-hidden flex flex-col">
 
@@ -429,6 +429,12 @@
             </div>
             <h2 id="diagTitle" class="result-headline"></h2>
             <p id="diagText" class="result-next-step"></p>
+            <div id="aiGuidance" class="hidden ai-primary">
+              <p id="aiSummary" class="result-next-step"></p>
+              <ol id="aiActions" class="ai-action-list"></ol>
+              <p class="result-caution">Personalizado pelo Gemini com os dados desta consulta.</p>
+            </div>
+            <p id="aiUnavailable" class="hidden guidance-source" role="status">A personalização está indisponível. Confira as orientações gerais e as pendências abaixo.</p>
             <p class="result-caution">Orientações condicionais. Confira solo, ciclo e safra com assistência técnica antes de plantar.</p>
           </div>
           <div class="result-panel">
@@ -438,10 +444,10 @@
               <p class="text-sm text-slate-600">Escolha uma opção. A consulta continua com os dados já preenchidos.</p>
               <div id="cultureOptions" class="culture-choice-list"></div>
             </div>
-            <div id="confirmedWindowsSection" class="mt-4">
-              <h4 class="result-subtitle">Períodos compatíveis</h4>
+            <details id="confirmedWindowsSection" class="result-more mt-4">
+              <summary>Ver períodos compatíveis por ciclo</summary>
               <div id="plantingWindows" class="planting-list"></div>
-            </div>
+            </details>
             <div id="conditionalWindowsSection" class="hidden mt-5">
               <h4 class="font-extrabold text-amber-900">Confirme o solo antes de usar estes períodos</h4>
               <p class="text-sm text-amber-900 mt-1">As opções abaixo são condicionais e ainda não validam o plantio.</p>
@@ -457,16 +463,11 @@
             </details>
           </div>
           <div class="result-panel guidance-panel">
-            <h3 class="result-section-title">Como cuidar da área?</h3>
-            <p class="guidance-intro">Ações sugeridas para planejar o manejo.</p>
-            <details id="aiGuidance" class="hidden guidance-disclosure">
-              <summary>Interpretação personalizada · Gemini</summary>
-              <p class="guidance-source">Texto gerado por IA a partir dos dados da consulta. Não substitui a avaliação técnica nem confirma o plantio.</p>
-              <p id="aiSummary" class="guidance-text"></p>
-              <ol id="aiActions" class="result-list"></ol>
-            </details>
-            <p id="aiUnavailable" class="hidden guidance-source" role="status">A interpretação por IA está indisponível. As orientações e os dados das outras fontes foram preservados.</p>
-            <div id="recommendations" class="guidance-list"></div>
+            <div id="fallbackGuidance">
+              <h3 class="result-section-title">Como cuidar da área?</h3>
+              <p class="guidance-intro">Orientações gerais · personalização indisponível nesta consulta.</p>
+              <div id="recommendations" class="guidance-list"></div>
+            </div>
             <details id="pendingDetails" class="guidance-disclosure guidance-pending">
               <summary>Pendências para validar <span id="pendingCount" class="guidance-count"></span></summary>
               <ul id="pendingItems" class="result-list"></ul>
@@ -476,12 +477,14 @@
               <ul id="warningItems" class="result-list"></ul>
             </details>
           </div>
-          <details class="result-panel result-more">
+          <details class="result-panel result-more" id="technicalDetails">
+            <summary>Dados e fontes da consulta</summary>
+          <details class="guidance-disclosure result-more">
             <summary>Publicações da Embrapa</summary>
             <p class="text-sm text-slate-600 mt-1">Conteúdo de publicações; a aplicação à propriedade exige avaliação das condições locais.</p>
             <div id="technicalReferences" class="space-y-4 mt-4"></div>
           </details>
-          <details class="result-panel result-more" id="nasaPanel">
+          <details class="guidance-disclosure result-more" id="nasaPanel">
             <summary>Histórico do clima · NASA</summary>
             <p id="nasaStatus" class="text-slate-600 mt-2">Análise climática indisponível nesta consulta.</p>
             <div id="climateMetrics" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4"></div>
@@ -489,11 +492,12 @@
               <div id="climateMonthly" class="mt-4 overflow-x-auto"></div>
             </details>
           </details>
-          <details class="result-panel result-more text-sm">
+          <details class="guidance-disclosure result-more text-sm">
             <summary>Fontes e arquivo da consulta</summary>
             <ul id="resultSources" class="result-list"></ul>
             <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>
             <button type="button" id="btnExportJson" class="secondary-button result-export">Baixar dados da consulta (JSON)</button>
+          </details>
           </details>
         </div>
       </div>
@@ -501,6 +505,6 @@
 
   </form>
 
-  <script type="module" src="app.js?v=20261114-gemini-5"></script>
+  <script type="module" src="app.js?v=20261114-personalizado-6"></script>
 </body>
 </html>

@@ -104,10 +104,12 @@ export function renderGemini(data) {
     && Array.isArray(output.actions);
   const panel = document.getElementById("aiGuidance");
   panel.classList.toggle("hidden", !available);
-  panel.open = false;
+  document.getElementById("fallbackGuidance").classList.toggle("hidden", available);
+  document.getElementById("diagText").classList.toggle("hidden", available);
   document.getElementById("aiUnavailable").classList.toggle("hidden",
     data.status_ia !== "indisponivel" && !(data.status_ia === "disponivel" && !available));
   if (!available) return;
+  document.getElementById("diagTitle").textContent = "Sua orientação personalizada";
   summary.textContent = output.resumo;
   const evidenceLabel = (id) => id === "usuario" ? "Dados informados"
     : id === "nasa:resumo" ? "Histórico NASA"
@@ -160,6 +162,7 @@ export function renderZarc(data, onReviewSoil) {
   const conditional = data.janelas_condicionais || [];
   const windows = document.getElementById("plantingWindows");
   document.getElementById("confirmedWindowsSection").classList.toggle("hidden", !confirmed.length);
+  document.getElementById("confirmedWindowsSection").open = false;
   windows.replaceChildren(...confirmed.map((window) => card(window, false)));
   if (!confirmed.length) windows.append(element("p", data.status_zarc === "cultura_ambigua"
     ? "Aguardando sua escolha de cultura acima para consultar as janelas."

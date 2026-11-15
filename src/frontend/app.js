@@ -1,5 +1,5 @@
-import { buildPayload, recomendar, buscarLocalizacao, resolverLocalizacao } from "./api.js?v=20261114-gemini-5";
-import { renderResults } from "./results.js?v=20261114-gemini-5";
+import { buildPayload, recomendar, buscarLocalizacao, resolverLocalizacao } from "./api.js?v=20261114-personalizado-6";
+import { renderResults } from "./results.js?v=20261114-personalizado-6";
 
 const state = {
   lat: -20.3856, lon: -43.5035, regionName: "Ouro Preto, MG", map: null, marker: null,

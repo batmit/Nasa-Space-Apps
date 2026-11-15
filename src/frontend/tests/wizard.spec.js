@@ -118,6 +118,7 @@ test("submission shows loading, prevents duplicate requests, and exports the res
   await expect(page.locator("#screen-3")).toHaveAttribute("aria-busy", "false");
   await expect(page.locator("#pendingItems")).toContainText("Confirme a análise do solo.");
   await expect(page.locator("#climateMetrics")).toBeEmpty();
+  await page.locator("#technicalDetails > summary").click();
   await page.getByText("Fontes e arquivo da consulta", { exact: true }).click();
   const downloadPromise = page.waitForEvent("download");
   await page.locator("#btnExportJson").click();
@@ -228,13 +229,14 @@ test("Gemini interpretation is optional and a failure preserves source results",
   await next(page);
   await page.locator("#btnSubmitToBackend").click();
   await expect(page.locator("#aiGuidance")).toBeVisible();
-  await page.locator("#aiGuidance > summary").click();
   await expect(page.locator("#aiSummary")).toHaveText("Confira o solo antes de plantar.");
+  await expect(page.locator("#fallbackGuidance")).toBeHidden();
   await expect(page.locator("#aiActions")).toContainText("Confirme a classe AD.");
   await page.locator("#btnEditInputs").click();
   await page.locator("#btnSubmitToBackend").click();
   await expect(page.locator("#aiGuidance")).toBeHidden();
   await expect(page.locator("#aiSummary")).toBeEmpty();
   await expect(page.locator("#aiUnavailable")).toBeVisible();
+  await expect(page.locator("#fallbackGuidance")).toBeVisible();
   await expect(page.locator("#pendingItems")).toContainText("Confirme a análise do solo.");
 });

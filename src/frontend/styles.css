@@ -36,6 +36,8 @@ body {
 .result-more > summary { cursor: pointer; font-weight: 700; font-size: .875rem; color: #334155; }
 .result-more > summary:focus-visible { outline: 3px solid #0284c7; outline-offset: 4px; }
 .result-export { display: block; margin-top: 1rem; }
+.ai-action-list { list-style: decimal; padding-left: 1.4rem; margin-top: 1rem; color: #334155; font-size: .95rem; line-height: 1.65; }
+.ai-action-list > li + li { margin-top: .8rem; }
 @media (max-width: 480px) { .result-stack .result-panel { padding: 1rem; border-radius: 1rem; } }
 .result-card { padding: 1rem; border: 1px solid #cbd5e1; border-radius: 1rem; overflow-wrap: anywhere; }
 .conditional-window { border-color: #f59e0b; background: #fffbeb; }
