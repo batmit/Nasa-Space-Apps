@@ -21,6 +21,39 @@ arquivo `index.html`: os módulos JavaScript e as chamadas usam a mesma origem.
 As dependências visuais (Tailwind, Leaflet, Lucide, fontes e mapas) usam CDN e
 precisam de conexão à internet.
 
+## Deploy na Vercel
+
+Importe este repositório na Vercel com **Root Directory na raiz do repositório
+(`.`)**. O `vercel.json` seleciona o preset **FastAPI** e configura o limite da
+função em 300 segundos. Deixe **Build Command**, **Install Command** e
+**Output Directory** nos padrões do preset; não configure um build npm.
+
+O `pyproject.toml` aponta para `src.backend.main:app`, a `.python-version`
+seleciona Python 3.12 e as dependências continuam em `requirements.txt`.
+O próprio FastAPI já serve a interface: `/` abre o frontend e `/api/v1/*`
+atende a API na mesma origem, sem precisar alterar os caminhos do JavaScript.
+
+Em **Settings → Environment Variables**, configure os valores necessários
+para **Production** e **Preview**:
+
+| Variável | Uso |
+| --- | --- |
+| `EMBRAPA_ACCESS_TOKEN` | Habilitar a consulta Agritec/ZARC. |
+| `EMBRAPA_RESPONDEAGRO_TOKEN` | Token específico da RespondeAgro, quando diferente do token Agritec. |
+| `GEMINI_API_KEY` | Habilitar a orientação por IA. |
+| `GEMINI_MODEL` | Opcional: substituir o modelo definido no backend. |
+| `NOMINATIM_USER_AGENT` | Identificar a aplicação e o contato do responsável. |
+| `NOMINATIM_BASE_URL` | Opcional: substituir o provedor padrão de geocodificação. |
+
+Cadastre os segredos diretamente na Vercel; não envie arquivos `.env`.
+Depois de alterar as variáveis, faça um novo deploy para aplicá-las.
+A `.vercelignore` exclui ambientes locais, segredos, caches e arquivos de teste
+dos uploads feitos pela CLI; `.vercel/` fica fora do Git.
+
+Após o deploy, confira `/`, `/api/v1/health` e uma consulta pelo formulário.
+O health verifica apenas se a API responde. Na Vercel, o cache NASA usa
+`/tmp/nasa_power`; ele é temporário e pode ser descartado entre execuções.
+
 ## Interface integrada
 
 O layout importado de `agroorbit-frontend-v4-unificado.zip` mantém o fluxo de
