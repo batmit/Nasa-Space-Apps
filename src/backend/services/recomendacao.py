@@ -117,8 +117,7 @@ class RecomendacaoService:
                 resposta.status_ia = "disponivel"
         if dados.restricoes and resposta.explicacao_ia is None:
             resposta.pendencias.append(
-                f'Análise personalizada indisponível para os limites informados: "{dados.restricoes}". '
-                "Não foi verificada a compatibilidade das orientações gerais com esses limites."
+                "Confira as restrições informadas com assistência técnica antes de seguir orientações gerais."
             )
         return resposta
 

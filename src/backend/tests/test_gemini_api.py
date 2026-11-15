@@ -19,18 +19,18 @@ from src.backend.modules.routes import obter_orientador_ia, recomendar
 
 def saida_personalizada():
     return {
-        "resumo": "Considere o maquinário disponível e confirme a interpretação do pH para soja.",
+        "resumo": "Considere as restrições e confirme a interpretação do pH para soja.",
         "actions": [],
         "analise_ph": {
             "valor_informado": 6.2,
-            "interpretacao": "pH 6,2 informado; sem método de medição e referência aplicável não é possível confirmar adequação para soja.",
-            "orientacao": "Informe o método usado para medir o pH 6,2 e confronte com a referência da cultura.",
+            "interpretacao": "pH 6,2 informado; o método de medição não foi informado.",
+            "orientacao": "Confirme o método e compare o resultado à referência da cultura.",
             "evidencias": ["usuario:ph"],
         },
         "analise_restricoes": {
             "texto_informado": "Não tenho maquinário para hortaliças/cenoura.",
-            "impacto": "Uma opção que exija mecanização de cenoura depende de equipamento não disponível.",
-            "orientacao": "Não planeje cenoura dependente desse equipamento sem confirmar acesso a serviço contratado e seu custo.",
+            "impacto": "A opção de cenoura depende de equipamento que o agricultor não possui.",
+            "orientacao": "Planeje somente opções compatíveis com o equipamento disponível.",
             "evidencias": ["usuario:restricoes"],
         },
     }
@@ -87,7 +87,10 @@ def test_adapter_envia_json_schema_e_retorna_saida_validada(resposta):
     params = client.interactions.create.call_args.kwargs
     enviado = json.loads(params["input"].split("\n", 1)[1])
     assert enviado["dados_informados"]["ph"] == 6.2
+    assert enviado["dados_informados"]["objetivo"] == resposta.dados_informados.objetivo
     assert enviado["dados_informados"]["restricoes"] == resposta.dados_informados.restricoes
+    assert enviado["evidencias_contexto"]["usuario:ph"] == "/dados_informados/ph"
+    assert enviado["evidencias_contexto"]["usuario:restricoes"] == "/dados_informados/restricoes"
     assert params["response_format"]["schema"] == StructuredGeminiOutput.model_json_schema()
     assert params["store"] is False
 
@@ -127,8 +130,7 @@ def test_fluxo_coleta_fontes_antes_da_ia_e_preserva_fallback(dados, resposta, fa
     assert contexto["pendencias"]
     assert contexto["status_zarc"] == "nao_configurado"
     assert resultado["restricoes_avaliadas"] is False
-    assert not any("As restrições em texto foram registradas" in p for p in resultado["pendencias"])
-    assert any(dados.restricoes in p for p in resultado["pendencias"]) == falha
+    assert any("restrições informadas" in p.lower() for p in resultado["pendencias"]) == falha
     assert resultado["status_ia"] == ("indisponivel" if falha else "disponivel")
     assert resultado["resumo_climatico"] is not None
     assert (resultado["explicacao_ia"] is None) == falha
@@ -143,7 +145,7 @@ def test_configuracao_usa_chave_explicita_modelo_e_timeout():
     with patch.dict("os.environ", {"GEMINI_API_KEY": "teste", "GEMINI_MODEL": "modelo-teste"}), patch("google.genai.Client") as client:
         adapter = obter_orientador_ia()
     assert adapter._model == "modelo-teste"
-    client.assert_called_once_with(api_key="teste", http_options={"timeout": 30000})
+    client.assert_called_once_with(api_key="teste", http_options={"timeout": 60000})
 
 
 def test_contexto_sem_fontes_nao_fabrica_evidencias(resposta):
@@ -190,7 +192,10 @@ def test_saida_curta_preserva_acao_e_evidencias_no_limite():
     assert resultado.actions[0].evidencias == ["usuario"]
 
 
-@pytest.mark.parametrize("caso", ["sem_ph", "ph_trocado", "sem_restricoes", "restricoes_trocadas", "evidencia_ph", "evidencia_restricoes", "evidencia_inventada"])
+@pytest.mark.parametrize("caso", [
+    "sem_ph", "ph_trocado", "sem_restricoes", "restricoes_trocadas",
+    "evidencia_ph", "evidencia_restricoes", "evidencia_inventada",
+])
 def test_rejeita_analise_que_omite_ou_troca_dados_do_produtor(resposta, caso):
     output = saida_personalizada()
     if caso == "sem_ph":

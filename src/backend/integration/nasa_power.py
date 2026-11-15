@@ -10,7 +10,9 @@ from urllib.parse import urlencode
 from urllib.request import urlopen
 
 URL = "https://power.larc.nasa.gov/api/temporal/daily/point"
-RAW_DIR = Path(__file__).resolve().parents[1] / "data" / "raw" / "nasa_power"
+RAW_DIR = (
+    Path("/tmp") if os.getenv("VERCEL") else Path(__file__).resolve().parents[1] / "data" / "raw"
+) / "nasa_power"
 PARAMETERS = "T2M,T2M_MAX,T2M_MIN,RH2M,PRECTOTCORR,ALLSKY_SFC_SW_DWN"
 
 

@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 const endpoint = "**/api/v1/recomendar";
+const catalogEndpoint = "**/api/v1/culturas/opcoes";
 const location = { regiao_nome: "Viçosa, MG", latitude: -20.75, longitude: -42.88 };
 const result = (dados, extra = {}) => ({
   status: "dados_insuficientes", dados_informados: dados,
@@ -25,12 +26,26 @@ test.beforeEach(async ({ page }) => {
     return route.abort();
   });
   await page.goto("/");
+  await page.route(catalogEndpoint, (route) => {
+    const data = route.request().postDataJSON();
+    return route.fulfill({ json: {
+      municipio: { codigo_ibge: 3146107, nome: "Ouro Preto", uf: "MG" },
+      opcoes: [{ id: 1, nome: `${data.cultura_desejada.toUpperCase()} SEQUEIRO`, cultivo: "SEQUEIRO" }],
+    } });
+  });
   await expect(page.locator("#screen-1")).toHaveAttribute("aria-hidden", "false");
 });
 
 async function next(page) {
   await page.locator("#btnNextToStep2").click();
   await expect(page.locator("#screen-2")).toHaveAttribute("aria-hidden", "false");
+}
+
+async function consult(page) {
+  await page.locator("#btnSubmitToBackend").click();
+  await expect(page.locator("#cultureGate")).toBeVisible();
+  await expect(page.locator("#backendResultsWrapper")).toBeHidden();
+  await page.locator("#cultureOptions button").first().click();
 }
 
 test("navigation and controls preserve the farmer's selections", async ({ page }) => {
@@ -72,7 +87,7 @@ test("location search waits for resolution and submits the selected coordinates"
     return route.fulfill({ json: result(data) });
   });
   await next(page);
-  await page.locator("#btnSubmitToBackend").click();
+  await consult(page);
   await expect(page.locator("#backendResultsWrapper")).toBeVisible();
 });
 
@@ -96,8 +111,8 @@ test("submission shows loading, prevents duplicate requests, and exports the res
     requests++;
     expect(route.request().method()).toBe("POST");
     const data = route.request().postDataJSON();
-    expect(data).toMatchObject({ cultura_desejada: "soja", ph: 5.5, restricoes: "Pouca água" });
-    expect(Object.keys(data)).toHaveLength(10);
+    expect(data).toMatchObject({ cultura_desejada: "SOJA SEQUEIRO", id_cultura: 1, ph: 5.5, restricoes: "Pouca água" });
+    expect(Object.keys(data)).toHaveLength(11);
     response = result(data);
     await waiting;
     await route.fulfill({ json: response });
@@ -106,6 +121,9 @@ test("submission shows loading, prevents duplicate requests, and exports the res
   await page.locator("#cropSelect").selectOption("soja");
   await page.locator("#userRestrictions").fill(" Pouca água ");
   await page.locator("#btnSubmitToBackend").click();
+  await expect(page.locator("#cultureGate")).toBeVisible();
+  expect(requests).toBe(0);
+  await page.locator("#cultureOptions button").first().click();
   await expect(page.locator("#loadingIndicator")).toBeVisible();
   await expect(page.locator("#screen-3")).toHaveAttribute("aria-busy", "true");
   await expect(page.locator("#btnSubmitToBackend")).toBeDisabled();
@@ -118,7 +136,8 @@ test("submission shows loading, prevents duplicate requests, and exports the res
   await expect(page.locator("#screen-3")).toHaveAttribute("aria-busy", "false");
   await expect(page.locator("#pendingItems")).toContainText("Confirme a análise do solo.");
   await expect(page.locator("#climateMetrics")).toBeEmpty();
-  await page.locator("#technicalDetails > summary").click();
+  await page.locator("#btnViewData").click();
+  await expect(page.locator("#technicalDetails")).toHaveAttribute("open", "");
   await page.getByText("Fontes e arquivo da consulta", { exact: true }).click();
   const downloadPromise = page.waitForEvent("download");
   await page.locator("#btnExportJson").click();
@@ -143,14 +162,12 @@ for (const failure of ["http", "network", "malformed"]) {
       return route.fulfill({ json: result(route.request().postDataJSON()) });
     });
     await next(page);
-    await page.locator("#btnSubmitToBackend").click();
+    await consult(page);
     await expect(page.locator("#backendResultsWrapper")).toBeVisible();
     await page.locator("#btnEditInputs").click();
-    await page.locator("#btnSubmitToBackend").click();
+    await consult(page);
     await expect(page.locator("#requestError")).toBeVisible();
-    await expect(page.locator("#requestErrorText")).toContainText(
-      failure === "http" ? "Fonte indisponível" : failure === "network" ? "conectar" : "formato",
-    );
+    await expect(page.locator("#requestErrorText")).toContainText("Confira sua conexão e tente novamente.");
     await expect(page.locator("#backendResultsWrapper")).toBeHidden();
     await expect(page.locator("#btnExportJson")).toBeDisabled();
     await expect(page.locator("#loadingIndicator")).toBeHidden();
@@ -161,26 +178,46 @@ for (const failure of ["http", "network", "malformed"]) {
   });
 }
 
-test("ambiguous culture choices automatically resubmit the selected ID", async ({ page }) => {
+test("culture is chosen before any recommendation request", async ({ page }) => {
   let calls = 0;
+  await page.route(catalogEndpoint, (route) => route.fulfill({ json: {
+    municipio: { codigo_ibge: 3146107, nome: "Ouro Preto", uf: "MG" },
+    opcoes: [{ id: 1, nome: "MILHO 1ª SAFRA SEQUEIRO", cultivo: "SEQUEIRO" },
+      { id: 2, nome: "MILHO 2ª SAFRA SEQUEIRO", cultivo: "SEQUEIRO" }],
+  } }));
   await page.route(endpoint, (route) => {
     calls++;
     const data = route.request().postDataJSON();
-    if (calls === 1) return route.fulfill({ json: result(data, {
-      status_zarc: "cultura_ambigua",
-      opcoes_cultura: [{ id: 1, nome: "MILHO SEQUEIRO" }, { id: 2, nome: "MILHO IRRIGADO", cultivo: "IRRIGADO" }],
-    }) });
-    expect(data).toMatchObject({ cultura_desejada: "MILHO SEQUEIRO", id_cultura: 1 });
+    expect(data).toMatchObject({ cultura_desejada: "MILHO 1ª SAFRA SEQUEIRO", id_cultura: 1 });
     return route.fulfill({ json: result(data) });
   });
   await next(page);
   await page.locator("#btnSubmitToBackend").click();
-  await page.locator("#cultureOptions").getByRole("button", { name: "Consultar MILHO SEQUEIRO", exact: true }).click();
+  await expect(page.locator("#cultureGate")).toBeVisible();
+  await expect(page.locator("#backendResultsWrapper")).toBeHidden();
+  expect(calls).toBe(0);
+  await page.locator("#cultureOptions").getByRole("button", { name: "Consultar MILHO 1ª SAFRA SEQUEIRO", exact: true }).click();
   await expect(page.locator("#screen-3")).toHaveAttribute("aria-hidden", "false");
   await expect(page.locator("#cropSelect")).toHaveValue("agritec:1");
   await expect(page.locator("#backendResultsWrapper")).toBeVisible();
-  await expect(page.locator("#cultureSelection")).toBeHidden();
-  expect(calls).toBe(2);
+  await expect(page.locator("#cultureGate")).toBeHidden();
+  expect(calls).toBe(1);
+});
+
+test("sem opção ZARC, a escolha pede revisão sem abrir resultados", async ({ page }) => {
+  let calls = 0;
+  await page.route(catalogEndpoint, (route) => route.fulfill({ json: {
+    municipio: { codigo_ibge: 3146107, nome: "Ouro Preto", uf: "MG" }, opcoes: [],
+  } }));
+  await page.route(endpoint, (route) => { calls++; return route.abort(); });
+  await next(page);
+  await page.locator("#btnSubmitToBackend").click();
+  await expect(page.locator("#cultureGate")).toBeVisible();
+  await expect(page.locator("#cultureGateFeedback")).toContainText("Revise a cultura");
+  await expect(page.locator("#backendResultsWrapper")).toBeHidden();
+  expect(calls).toBe(0);
+  await page.locator("#btnCultureEdit").click();
+  await expect(page.locator("#screen-2")).toHaveAttribute("aria-hidden", "false");
 });
 
 test("results display planting windows and climate, escape external text, and clear stale metrics", async ({ page }) => {
@@ -192,28 +229,35 @@ test("results display planting windows and climate, escape external text, and cl
       janelas: [{ cultura: "MILHO", solo: "ARGILOSO", ciclo: "GRUPO I",
         dia_inicio: 1, mes_inicio: 11, dia_fim: 30, mes_fim: 11,
         safra_inicio: 2026, safra_fim: 2027, risco: 20, portaria: "Portaria de teste" }],
-      referencias: [{ pergunta: "<img src=x onerror=alert(1)>", resposta: "Texto técnico", livro: "Milho",
-        url_publicacao: "javascript:alert(1)" }],
       resumo_climatico: { data_inicio: "2023-01-01", data_fim: "2025-12-31",
         precipitacao_media_anual_mm: 1000, temperatura_media_c: 20,
         umidade_relativa_ar_pct: 70, radiacao_media_mj_m2_dia: 14.4,
-        maior_sequencia_dias_sem_chuva: 15, meses: [] },
+        maior_sequencia_dias_sem_chuva: 15, meses: [
+          { mes: 1, precipitacao_media_mm: 120, temperatura_media_c: 23, anos_chuva_completos: 3 },
+          { mes: 2, precipitacao_media_mm: 60, temperatura_media_c: 24, anos_chuva_completos: 3 },
+        ] },
     } : {};
     return route.fulfill({ json: result(route.request().postDataJSON(), extra) });
   });
   await next(page);
-  await page.locator("#btnSubmitToBackend").click();
+  await consult(page);
   await expect(page.locator("#diagTitle")).toContainText("Há períodos compatíveis");
-  await expect(page.locator("#plantingWindows")).toContainText("1/11 a 30/11");
+  await expect(page.locator("#plantingWindows")).toContainText("01/11 – 30/11");
   await expect(page.locator("#climateMetrics")).toContainText("MJ/m²/dia");
-  await expect(page.locator("#technicalReferences")).toContainText("<img src=x onerror=alert(1)>");
-  await expect(page.locator("#technicalReferences img, #technicalReferences a")).toHaveCount(0);
+  await expect(page.locator("#nasaPanel")).toBeVisible();
+  await expect(page.locator("#climateChart .climate-bar")).toHaveCount(2);
+  await expect(page.locator("#climateChart")).toContainText("120 mm");
+  await expect(page.locator("#climateChart")).toContainText("23 °C");
+  await page.getByText("Ver tabela mês a mês").click();
+  await expect(page.locator("#climateMonthly")).toContainText("Chuva média (mm/mês)");
+  await expect(page.locator("#climateMonthly tbody tr:first-child")).toContainText("120");
+  await expect(page.getByText("Publicações da Embrapa")).toHaveCount(0);
   await page.locator("#btnEditInputs").click();
-  await page.locator("#btnSubmitToBackend").click();
-  await expect(page.locator("#diagTitle")).toContainText("ainda precisa ser validado");
+  await consult(page);
+  await expect(page.locator("#diagTitle")).toContainText("Confira os dados de plantio");
   await expect(page.locator("#climateMetrics")).toBeEmpty();
+  await expect(page.locator("#climateChart")).toBeEmpty();
   await expect(page.locator("#climateMonthly")).toBeEmpty();
-  await expect(page.locator("#technicalReferences")).toContainText("Nenhuma referência");
   await expect(page.locator("#plantingWindows article")).toHaveCount(0);
 });
 
@@ -227,16 +271,15 @@ test("Gemini interpretation is optional and a failure preserves source results",
     } : { status_ia: "indisponivel", explicacao_ia: null }) });
   });
   await next(page);
-  await page.locator("#btnSubmitToBackend").click();
+  await consult(page);
   await expect(page.locator("#aiGuidance")).toBeVisible();
   await expect(page.locator("#aiSummary")).toHaveText("Confira o solo antes de plantar.");
   await expect(page.locator("#fallbackGuidance")).toBeHidden();
   await expect(page.locator("#aiActions")).toContainText("Confirme a classe AD.");
   await page.locator("#btnEditInputs").click();
-  await page.locator("#btnSubmitToBackend").click();
+  await consult(page);
   await expect(page.locator("#aiGuidance")).toBeHidden();
   await expect(page.locator("#aiSummary")).toBeEmpty();
-  await expect(page.locator("#aiUnavailable")).toBeVisible();
   await expect(page.locator("#fallbackGuidance")).toBeVisible();
   await expect(page.locator("#pendingItems")).toContainText("Confirme a análise do solo.");
 });

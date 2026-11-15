@@ -7,3 +7,4 @@ src/backend/data/raw/nasa_power/
 node_modules/
 test-results/
 playwright-report/
+.vercel/

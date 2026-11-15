@@ -18,7 +18,7 @@ export async function requestJson(path, options = {}) {
     if (!response.ok) {
       const message = typeof data.detail === "string" ? data.detail
         : response.status === 422 ? "Confira os campos informados e tente novamente."
-        : "O serviço está indisponível. Tente novamente mais tarde.";
+        : "Confira a conexão e tente novamente.";
       throw new ApiError(message, response.status);
     }
     return data;
@@ -63,6 +63,14 @@ export function buildPayload(formData) {
 export function recomendar(payload) {
   return requestJson("/api/v1/recomendar", {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+  });
+}
+
+export function buscarOpcoesCultura(payload) {
+  const { latitude, longitude, cultura_desejada, forma_irrigacao } = payload;
+  return requestJson("/api/v1/culturas/opcoes", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ latitude, longitude, cultura_desejada, forma_irrigacao }),
   });
 }
 

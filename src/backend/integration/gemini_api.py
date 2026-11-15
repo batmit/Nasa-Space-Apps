@@ -8,9 +8,17 @@ from ..models.gemini import (
 SYSTEM_PROMPT = """
 Responda em português do Brasil, com linguagem simples e concisa.
 Sua resposta será o conteúdo principal da tela do agricultor.
-Priorize o próximo passo, o objetivo e as restrições do agricultor. Evite repetir dados, listar métricas,
+Depois do histórico climático da NASA, o agricultor verá seu resumo e as ações.
+Sintetize em até duas frases e 360 caracteres o que os dados informados, o histórico
+climático, as referências da Embrapa e as condições do ZARC indicam em conjunto,
+somente quando cada fonte estiver presente. Aponte a principal limitação para o
+objetivo do agricultor. Depois, proponha até três ações, cada uma com uma frase
+de até 220 caracteres. Priorize o próximo passo, o objetivo e as restrições.
+Evite repetir dados, listar métricas,
 jargões, saudações e introduções. Não use Markdown ou listas dentro das strings.
 Se faltar escolher a cultura ou confirmar o solo no ZARC, destaque isso no resumo.
+Evite as palavras "inconclusivo" e "indisponível" na orientação ao agricultor.
+Quando faltar uma fonte ou confirmação, indique o próximo passo sem sugerir que o plantio foi validado.
 Mencione rotação ou cobertura somente quando pertinente, sem inventar uma espécie
 validada. Não é obrigatório preencher três ações se as evidências forem escassas.
 Use somente as evidências fornecidas para afirmações específicas sobre a
@@ -45,7 +53,7 @@ Não apresente a interpretação gerada como validação técnica da propriedade
 
 
 class GeminiClient:
-    def __init__(self, client, model: str = "gemini-4-hydrogen"):
+    def __init__(self, client, model: str = "gemini-3.1-flash-lite"):
         self._client = client
         self._model = model
 
@@ -55,9 +63,6 @@ class GeminiClient:
                 model=self._model,
                 system_instruction=SYSTEM_PROMPT,
                 input="Analise o cenário agrícola neste JSON:\n" + json.dumps(contexto, ensure_ascii=False, allow_nan=False),
-                generation_config={
-                    "thinking_level": "low",
-                },
                 response_format={
                     "type": "text", "mime_type": "application/json",
                     "schema": StructuredGeminiOutput.model_json_schema(),
@@ -65,34 +70,24 @@ class GeminiClient:
                 store=False,
                 timeout=60.0,
             )
-
             resultado = StructuredGeminiOutput.model_validate_json(interaction.output_text)
             permitidas = set(contexto["evidencias_contexto"])
-            analises = [*resultado.actions, resultado.analise_ph]
             dados = contexto["dados_informados"]
-
-            if resultado.analise_ph.valor_informado != dados["ph"]:
-                raise ValueError("O pH analisado difere do informado")
-            if "usuario:ph" not in resultado.analise_ph.evidencias:
-                raise ValueError("Análise de pH sem evidência do produtor")
-
+            if resultado.analise_ph.valor_informado != dados["ph"] or "usuario:ph" not in resultado.analise_ph.evidencias:
+                raise ValueError("A análise de pH não corresponde ao dado informado")
+            analises = [*resultado.actions, resultado.analise_ph]
             restricoes = dados["restricoes"]
-            analise = resultado.analise_restricoes
+            analise_restricoes = resultado.analise_restricoes
             if restricoes:
-                if analise is None or analise.texto_informado != restricoes:
-                    raise ValueError("As restrições não foram preservadas na análise")
-                if "usuario:restricoes" not in analise.evidencias:
-                    raise ValueError("Análise sem evidência das restrições")
-                analises.append(analise)
-
-            elif analise is not None:
-                raise ValueError("Restrições não informadas foram inventadas")
-
+                if (analise_restricoes is None or analise_restricoes.texto_informado != restricoes
+                        or "usuario:restricoes" not in analise_restricoes.evidencias):
+                    raise ValueError("As restrições informadas não foram preservadas")
+                analises.append(analise_restricoes)
+            elif analise_restricoes is not None:
+                raise ValueError("Foram inventadas restrições")
             if any(id_ not in permitidas for item in analises for id_ in item.evidencias):
                 raise ValueError("Evidência desconhecida")
-
             return resultado
-
         except Exception as exc:
             # Erros do SDK e validação não expõem prompts, chaves ou dados ao cliente.
             raise OrientacaoIAError("Orientação personalizada indisponível.") from exc
