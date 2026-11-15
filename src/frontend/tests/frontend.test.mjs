@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { ApiError, buildPayload, recomendar, requestJson } from "../api.js";
+import { ApiError, buildPayload, buscarOpcoesCultura, recomendar, requestJson } from "../api.js";
 import { renderClimate, renderResults, renderZarc, renderGemini } from "../results.js";
 
 const input = {
@@ -43,6 +43,18 @@ test("chamada usa a rota real, mesma origem e JSON", async (context) => {
   assert.equal((await recomendar(buildPayload(form(input)))).status, "dados_insuficientes");
 });
 
+test("catálogo consulta apenas localização, cultura e irrigação antes da recomendação", async (context) => {
+  context.mock.method(globalThis, "fetch", async (path, options) => {
+    assert.equal(path, "/api/v1/culturas/opcoes");
+    assert.deepEqual(JSON.parse(options.body), {
+      latitude: -20.3856, longitude: -43.5035,
+      cultura_desejada: "milho", forma_irrigacao: "sem_irrigacao",
+    });
+    return { ok: true, json: async () => ({ municipio: { nome: "Ouro Preto", uf: "MG" }, opcoes: [] }) };
+  });
+  assert.deepEqual((await buscarOpcoesCultura(buildPayload(form(input)))).opcoes, []);
+});
+
 test("erros HTTP, JSON inválido e rede são informados sem resposta fictícia", async (context) => {
   context.mock.method(globalThis, "fetch", async () => ({ ok: false, status: 503, json: async () => ({ detail: "Integrações não configuradas." }) }));
   await assert.rejects(requestJson("/api/v1/recomendar"), (error) => error instanceof ApiError && error.status === 503);
@@ -53,9 +65,10 @@ test("erros HTTP, JSON inválido e rede são informados sem resposta fictícia",
 });
 
 class Element {
-  constructor(tag) { this.tag = tag; this.children = []; this.textContent = ""; this.classList = { toggle: (name, enabled) => { this[name] = enabled; } }; }
+  constructor(tag) { this.tag = tag; this.children = []; this.textContent = ""; this.style = {}; this.attributes = {}; this.classList = { toggle: (name, enabled) => { this[name] = enabled; } }; }
   append(...children) { this.children.push(...children); }
   replaceChildren(...children) { this.children = children; }
+  setAttribute(name, value) { this.attributes[name] = value; }
   addEventListener(name, callback) {
     this.listeners ??= {};
     this.listeners[name] = callback;
@@ -64,7 +77,7 @@ class Element {
   set innerHTML(_) { throw new Error("Conteúdo externo não deve ser renderizado como HTML"); }
 }
 
-test("resultado renderiza fontes reais como texto e limpa dados da consulta anterior", (context) => {
+test("resultado renderiza orientações como texto e limpa dados da consulta anterior", (context) => {
   const nodes = new Map();
   globalThis.document = {
     createElement: (tag) => new Element(tag),
@@ -83,10 +96,14 @@ test("resultado renderiza fontes reais como texto e limpa dados da consulta ante
   assert.equal(nodes.get("pendingDetails").open, true);
   assert.equal(nodes.get("warningDetails").open, false);
   assert.equal(nodes.get("pendingCount").textContent, "1");
-  assert.equal(nodes.get("technicalReferences").children[0].children[0].textContent, "<img src=x onerror=alert(1)>");
-  assert.equal(nodes.get("technicalReferences").children[0].children.filter((node) => node.tag === "a").length, 0);
+  renderResults({ ...data,
+    pendencias: ["Zoneamento Embrapa indisponível: erro externo."],
+    avisos: ["Análise climática indisponível.", "Orientação por IA indisponível."],
+  }, () => {});
+  assert.equal(nodes.get("warningCount").textContent, "1");
+  assert.match(nodes.get("pendingItems").children[0].textContent, /Consulte novamente o zoneamento/);
+  assert.doesNotMatch(nodes.get("warningItems").children[0].textContent, /indisponível/i);
   renderResults({ ...data, referencias: [] }, () => {});
-  assert.equal(nodes.get("technicalReferences").children[0].tag, "p");
   assert.throws(() => renderResults({}, () => {}), /formato/);
   renderResults({ ...data, pendencias: [], orientacoes: [{ tema: "conservacao_agua", texto: "Manter cobertura.",
     fonte: "Embrapa", evidencias: ["Dado preservado"], url_fonte: "https://www.embrapa.br/" }] }, () => {});
@@ -155,13 +172,25 @@ test("resumo NASA exibe unidades corretas e limpa métricas quando indisponível
     temperatura_media_c: 20, umidade_relativa_ar_pct: 70, radiacao_media_mj_m2_dia: 14.4,
     maior_sequencia_dias_sem_chuva: 20, meses: [{ mes: 1, precipitacao_media_mm: 100, temperatura_media_c: 20, anos_chuva_completos: 3 }],
   }, true);
-  assert.match(nodes.get("nasaStatus").textContent, /2023-01-01/);
+  assert.equal(nodes.get("nasaStatus").textContent, "");
   assert.equal(nodes.get("climateMetrics").children[2].children[0].textContent, "Umidade relativa do ar a 2 m");
   assert.match(nodes.get("climateMetrics").children[3].children[1].textContent, /MJ\/m²\/dia/);
+  assert.equal(nodes.get("climateChart").children[0].tag, "figure");
+  const bar = nodes.get("climateChart").children[0].children[2].children[0].children[0].children[1].children[0];
+  assert.equal(bar.style.height, "100%");
+  assert.match(nodes.get("climateChart").children[0].children[2].children[0].children[0].attributes["aria-label"], /Jan: chuva 100 mm; temperatura 20 °C/);
+  renderClimate({
+    data_inicio: "2025-05-01", data_fim: "2026-10-31", anos_chuva_completos: 0,
+    precipitacao_media_anual_mm: null, temperatura_media_c: 20,
+    umidade_relativa_ar_pct: 70, radiacao_media_mj_m2_dia: 14.4,
+    maior_sequencia_dias_sem_chuva: 20, meses: [],
+  }, true);
+  assert.equal(nodes.get("climateMetrics").children[0].children[1].textContent, "Sem ano civil completo no período");
   renderClimate(null, false);
   assert.equal(nodes.get("climateMetrics").children.length, 0);
+  assert.equal(nodes.get("climateChart").children.length, 0);
   assert.equal(nodes.get("climateMonthly").children.length, 0);
-  assert.match(nodes.get("nasaStatus").textContent, /indisponível/);
+  assert.match(nodes.get("nasaStatus").textContent, /Consulte novamente/);
 });
 
 test("janelas condicionais ficam separadas das confirmadas e são limpas ao repetir consulta", (context) => {
@@ -185,14 +214,18 @@ test("janelas condicionais ficam separadas das confirmadas e são limpas ao repe
   assert.equal(nodes.get("conditionalWindowsSection").hidden, false);
   assert.equal(nodes.get("confirmedWindowsSection").hidden, true);
   assert.equal(nodes.get("btnReviewSoil").onclick, review);
-  assert.match(nodes.get("zarcStatus").textContent, /pendente/);
-  renderZarc({ status_zarc: "disponivel", janelas_confirmadas: [window], janelas_condicionais: [] });
+  assert.equal(nodes.get("zarcStatus").textContent, "");
+  renderZarc({ status_zarc: "disponivel", janelas_confirmadas: [window,
+    { ...window, dia_inicio: 1, mes_inicio: 12, dia_fim: 20, mes_fim: 12 }], janelas_condicionais: [] });
   assert.equal(nodes.get("plantingWindows").children[0].tag, "article");
+  assert.equal(nodes.get("plantingWindows").children.length, 1);
+  assert.equal(nodes.get("zarcCount").textContent, "2 períodos compatíveis");
+  assert.match(nodes.get("plantingWindows").children[0].children[2].textContent, /01\/12 – 20\/12/);
   assert.equal(nodes.get("confirmedWindowsSection").hidden, false);
   assert.equal(nodes.get("conditionalWindows").children.length, 0);
   assert.equal(nodes.get("conditionalWindowsSection").hidden, true);
   renderZarc({ status_zarc: "falha_autenticacao", janelas: [], janelas_condicionais: [] });
-  assert.match(nodes.get("zarcStatus").textContent, /recusado/);
+  assert.match(nodes.get("zarcStatus").textContent, /acesso/);
   assert.equal(nodes.get("confirmedWindowsSection").hidden, true);
 });
 
@@ -202,8 +235,15 @@ test("terceira tela mantém IDs únicos e controles essenciais fora de blocos re
   assert.equal(ids.length, new Set(ids).size, "IDs duplicados podem deixar dados invisíveis ou desatualizados");
   const third = html.slice(html.indexOf('<section id="screen-3"'));
   assert.match(third, /Quando plantar\?/);
-  assert.match(third, /Como cuidar da área\?/);
-  assert.match(third, /<details[^>]*id="nasaPanel"/);
+  assert.match(third, /Análise da sua área/);
+  assert.match(third, /O que fazer agora/);
+  assert.match(third, /id="btnViewData"/);
+  assert.match(third, /<div id="confirmedWindowsSection"/);
+  assert.match(third, /<section[^>]*id="nasaPanel"/);
+  assert.ok(third.indexOf('id="nasaPanel"') < third.indexOf('id="aiGuidance"'));
+  assert.ok(third.indexOf('id="aiGuidance"') < third.indexOf('id="confirmedWindowsSection"'));
+  assert.ok(third.indexOf('id="nasaPanel"') < third.indexOf('id="technicalDetails"'));
+  assert.doesNotMatch(third, /Publicações da Embrapa|technicalReferences/);
   assert.doesNotMatch(third.match(/<div id="cultureSelection"[\s\S]*?<\/div>/)[0], /<details/);
 });
 
@@ -225,8 +265,8 @@ test("resumo diferencia compatibilidade de confirmação agronômica e mantém f
   renderResults({ ...data, status_zarc: "disponivel", janelas: [{ ciclo: "I", solo: "AD3", risco: 20 }] }, () => {});
   assert.match(nodes.get("diagTitle").textContent, /compatíveis/);
   renderResults({ ...data, status_zarc: "falha_autenticacao" }, () => {});
-  assert.match(nodes.get("diagTitle").textContent, /ainda precisa ser validado/);
-  assert.match(nodes.get("zarcStatus").textContent, /recusado/);
+  assert.match(nodes.get("diagTitle").textContent, /Confira os dados/);
+  assert.match(nodes.get("zarcStatus").textContent, /acesso/);
 });
 
 test("payload preserva descrição do solo separada da classe ZARC", () => {
@@ -276,37 +316,28 @@ test("Gemini aparece como interpretação, preserva evidências e limpa dados an
   };
   context.after(() => { delete globalThis.document; });
   renderGemini({ status_ia: "disponivel", explicacao_ia: {
-    resumo: "<img src=x onerror=alert(1)>",
-    analise_ph: { valor_informado: 4.2, interpretacao: "pH informado 4,2; método ausente.", orientacao: "Confirme a medição para a cultura." },
-    analise_restricoes: { texto_informado: "<b>Sem água para irrigar</b>", impacto: "Irrigação depende de água não disponível.", orientacao: "Avalie opções de sequeiro compatíveis com as chuvas." },
-    actions: [{ description: "Confirme a classe AD.",
-      evidencias: ["usuario", "zarc:condicional:0"] }],
+    resumo: "<img src=x onerror=alert(1)>", actions: [{ description: "Confirme a classe AD.",
+      evidencias: ["usuario:ph", "usuario:restricoes", "zarc:condicional:0"] }],
+    analise_ph: { valor_informado: 5.5, interpretacao: "pH ácido", orientacao: "Avalie correção." },
+    analise_restricoes: { texto_informado: "Pouca água", impacto: "Limita irrigação", orientacao: "Planeje a água." },
   } });
   assert.equal(nodes.get("aiGuidance").hidden, false);
   assert.equal(nodes.get("fallbackGuidance").hidden, true);
   assert.equal(nodes.get("diagText").hidden, true);
-  assert.equal(nodes.get("diagTitle").textContent, "Sua orientação personalizada");
+  assert.equal(nodes.get("diagTitle").textContent, "Resumo da sua área");
   assert.equal(nodes.get("aiSummary").textContent, "<img src=x onerror=alert(1)>");
-  const analyses = nodes.get("aiPersonalizacao").children;
-  assert.equal(analyses.length, 2);
-  assert.equal(analyses[0].children[0].textContent, "pH informado: 4.2");
-  assert.match(analyses[0].children[1].textContent, /4,2/);
-  assert.equal(analyses[1].children[1].textContent, "<b>Sem água para irrigar</b>");
-  assert.match(analyses[1].children[3].textContent, /sequeiro/);
   const action = nodes.get("aiActions").children[0];
-  assert.equal(action.children[0].textContent, "Confirme a classe AD.");
-  assert.match(action.children[1].children[1].textContent, /condicional/);
+  assert.equal(action.tag, "p");
+  assert.equal(action.textContent, "Confirme a classe AD.");
+  assert.equal(action.className, "ai-action-paragraph");
   renderGemini({ status_ia: "indisponivel", explicacao_ia: null });
   assert.equal(nodes.get("aiGuidance").hidden, true);
-  assert.equal(nodes.get("aiUnavailable").hidden, false);
   assert.equal(nodes.get("aiSummary").textContent, "");
   assert.equal(nodes.get("aiActions").children.length, 0);
-  assert.equal(nodes.get("aiPersonalizacao").children.length, 0);
   assert.equal(nodes.get("fallbackGuidance").hidden, false);
   assert.equal(nodes.get("diagText").hidden, false);
   renderGemini({ status_ia: "nao_configurado" });
-  assert.equal(nodes.get("aiUnavailable").hidden, true);
   renderGemini({ status_ia: "disponivel", explicacao_ia: {} });
   assert.equal(nodes.get("aiGuidance").hidden, true);
-  assert.equal(nodes.get("aiUnavailable").hidden, false);
+  assert.equal(nodes.get("fallbackGuidance").hidden, false);
 });

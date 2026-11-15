@@ -31,7 +31,7 @@ três etapas: localização, informações da área e resultado.
 - `src/frontend/results.js`: apresentação de `RecomendacaoResponse` como texto.
 - `src/frontend/styles.css`: estilos do layout e dos resultados.
 
-O frontend chama `/api/v1/recomendar`. A tela mostra janelas ZARC, referências,
+O frontend consulta `/api/v1/culturas/opcoes` para o agricultor escolher a opção ZARC do município antes de chamar `/api/v1/recomendar`. A tela mostra janelas ZARC,
 avisos, pendências, indicadores NASA e orientações de manejo com evidências. Não existem respostas simuladas de contingência: falhas
 mostram uma mensagem e permitem repetir a consulta. Doses de calcário, impactos
 percentuais e séries NASA fictícias do protótipo foram removidos.
@@ -69,6 +69,7 @@ arquivos por módulo, mantendo a inicialização em `main.py`.
 | GET | `/api/v1/health` | Verificar se a API está respondendo. |
 | GET | `/api/v1/localizacao/buscar?consulta=Ouro%20Preto%20MG` | Buscar um ponto e identificar seu município. |
 | GET | `/api/v1/localizacao/reversa?latitude=-20.3856&longitude=-43.5035` | Identificar o município do ponto selecionado. |
+| POST | `/api/v1/culturas/opcoes` | Listar opções ZARC por coordenadas, cultura e irrigação antes da recomendação. |
 | POST | `/api/v1/recomendar` | Combinar histórico NASA, janelas ZARC e orientações de manejo. |
 
 Exemplo:
@@ -200,7 +201,7 @@ os 18 meses completos anteriores ao mês atual (em novembro de 2026:
 01/05/2025 a 31/10/2026), sem incluir o mês em andamento, e chama a
 função existente `request_NASA_API`. O cache em
 `src/backend/data/raw/nasa_power/` é reutilizado, fica fora do Git e mantém
-`response.json` e `metadata.json` para cada consulta. Dados de anos completos
+`response.json` e `metadata.json` para cada consulta. Dados em cache
 não têm expiração automática; `force_refresh=True` permite atualizar a coleta.
 
 `analise_climatica_realizada` é `true` somente quando o resumo foi calculado
@@ -290,7 +291,7 @@ O `package.json` fica em `src/frontend`; `npm test` na raiz não é configurado.
 ### Orientação personalizada com Gemini (opcional)
 
 Instale `requirements.txt` e configure `GEMINI_API_KEY` no ambiente do servidor.
-O backend carrega o `.env` da raiz automaticamente, preservando as variáveis já definidas no ambiente. Nunca coloque a chave no
+O código não carrega arquivos `.env` automaticamente. Nunca coloque a chave no
 frontend ou no Git. `GEMINI_MODEL` permite substituir o modelo padrão
 `gemini-3.1-flash-lite`. Reinicie o servidor ao alterar essas variáveis.
 

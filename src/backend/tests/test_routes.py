@@ -6,8 +6,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.backend.integration.localizacao import LocalizacaoError
+from src.backend.models.embrapa import CulturaEmbrapa
 from src.backend.main import app
-from src.backend.models.recomendacao import LocalizacaoSelecionada
+from src.backend.models.recomendacao import LocalizacaoSelecionada, Municipio
 from src.backend.modules.routes import obter_localizador, obter_servico_recomendacao
 
 
@@ -59,6 +60,28 @@ def test_location_search_trims_and_serializes_response(client):
     assert response.status_code == 200
     assert response.json() == location.model_dump()
     source.buscar_localizacao.assert_called_once_with("Ouro Preto MG")
+
+
+def test_culture_options_are_fetched_before_full_recommendation(client, monkeypatch):
+    location = Mock()
+    location.resolver_municipio.return_value = Municipio(codigo_ibge=3146107, nome="Viçosa", uf="MG")
+    app.dependency_overrides[obter_localizador] = lambda: location
+    catalog = Mock()
+    catalog.listar_culturas_municipio.return_value = [
+        CulturaEmbrapa(id=57, nome="MILHO 1ª SAFRA", cultivo="SEQUEIRO", possui_zoneamento=True),
+        CulturaEmbrapa(id=58, nome="MILHO 2ª SAFRA", cultivo="SEQUEIRO", possui_zoneamento=True),
+        CulturaEmbrapa(id=59, nome="MILHO IRRIGADO", cultivo="IRRIGADO", possui_zoneamento=True),
+    ]
+    monkeypatch.setenv("EMBRAPA_ACCESS_TOKEN", "teste")
+    monkeypatch.setattr("src.backend.modules.routes.EmbrapaClient", lambda: catalog)
+    response = client.post("/api/v1/culturas/opcoes", json={
+        "latitude": -20.75, "longitude": -42.88, "cultura_desejada": "milho",
+        "forma_irrigacao": "sem_irrigacao",
+    })
+    assert response.status_code == 200
+    assert [option["id"] for option in response.json()["opcoes"]] == [57, 58]
+    location.resolver_municipio.assert_called_once_with(-20.75, -42.88)
+    catalog.listar_culturas_municipio.assert_called_once_with(3146107)
 
 
 @pytest.mark.parametrize("change", [

@@ -1,9 +1,9 @@
-import { buildPayload, recomendar, buscarLocalizacao, resolverLocalizacao } from "./api.js?v=20261114-personalizado-6";
-import { renderResults } from "./results.js?v=20261114-personalizado-6";
+import { buildPayload, buscarOpcoesCultura, recomendar, buscarLocalizacao, resolverLocalizacao } from "./api.js?v=20261115-clima-18m-1";
+import { renderCultureOptions, renderResults } from "./results.js?v=20261115-clima-18m-1";
 
 const state = {
   lat: -20.3856, lon: -43.5035, regionName: "Ouro Preto, MG", map: null, marker: null,
-  submitting: false, locating: false, locationRevision: 0, lastResponse: null,
+  submitting: false, locating: false, locationRevision: 0, lastResponse: null, retryConfirmed: false,
 };
 const byId = (id) => document.getElementById(id);
 const show = (id, visible) => byId(id).classList.toggle("hidden", !visible);
@@ -140,10 +140,10 @@ function chooseCulture(option) {
   }
   select.value = entry.value;
   select.dispatchEvent(new Event("change"));
-  submitForm();
+  submitForm(undefined, true);
 }
 
-async function submitForm(event) {
+async function submitForm(event, cultureConfirmed = false) {
   event?.preventDefault();
   if (state.submitting) return;
   if (state.locating) { feedback("formFeedback", "Aguarde a identificação do município."); return; }
@@ -164,17 +164,38 @@ async function submitForm(event) {
   }
   catch (error) { goToScreen(2); feedback("formFeedback", error.message); return; }
   feedback("formFeedback", "");
+  state.retryConfirmed = cultureConfirmed;
   state.submitting = true;
   state.lastResponse = null;
   byId("btnSubmitToBackend").disabled = true;
   byId("btnExportJson").disabled = true;
   goToScreen(3);
   show("requestError", false);
+  show("cultureGate", false);
   show("backendResultsWrapper", false);
   show("loadingIndicator", true);
+  byId("loadingTitle").textContent = cultureConfirmed ? "Preparando orientações e janelas..." : "Buscando opções de cultura...";
   byId("screen-3").setAttribute("aria-busy", "true");
   try {
+    if (!cultureConfirmed) {
+      const catalog = await buscarOpcoesCultura(payload);
+      if (!catalog?.municipio || !Array.isArray(catalog.opcoes)) {
+        throw new Error("Confira as opções de cultura e tente novamente.");
+      }
+      byId("cultureGateRegion").textContent = `${catalog.municipio.nome}, ${catalog.municipio.uf}`;
+      renderCultureOptions(catalog.opcoes, chooseCulture);
+      feedback("cultureGateFeedback", catalog.opcoes.length ? "" : "Revise a cultura ou a forma de irrigação para continuar.");
+      show("cultureGate", true);
+      return;
+    }
     const data = await recomendar(payload);
+    if (data.status_zarc === "cultura_ambigua" && data.opcoes_cultura?.length) {
+      byId("cultureGateRegion").textContent = `${data.municipio.nome}, ${data.municipio.uf}`;
+      renderCultureOptions(data.opcoes_cultura, chooseCulture);
+      feedback("cultureGateFeedback", "Escolha uma opção para continuar.");
+      show("cultureGate", true);
+      return;
+    }
     renderResults(data, chooseCulture, () => {
       goToScreen(2);
       byId("zarcSoilDetails").open = true;
@@ -184,7 +205,7 @@ async function submitForm(event) {
     byId("btnExportJson").disabled = false;
     show("backendResultsWrapper", true);
   } catch (error) {
-    feedback("requestErrorText", error.message);
+    feedback("requestErrorText", error.status === 422 ? error.message : "Confira sua conexão e tente novamente.");
     show("requestError", true);
   } finally {
     state.submitting = false;
@@ -214,7 +235,12 @@ function init() {
     if (!state.locating) goToScreen(2);
   });
   for (const id of ["btnBackToStep1", "btnBackToStep1Bottom"]) byId(id).addEventListener("click", () => goToScreen(1));
-  for (const id of ["btnEditInputs", "btnErrorEdit"]) byId(id).addEventListener("click", () => goToScreen(2));
+  for (const id of ["btnEditInputs", "btnErrorEdit", "btnCultureEdit"]) byId(id).addEventListener("click", () => goToScreen(2));
+  byId("btnViewData").addEventListener("click", () => {
+    const details = byId("technicalDetails");
+    details.open = true;
+    details.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
   document.querySelectorAll(".step-indicator").forEach((button) => button.addEventListener("click", () => {
     if (!button.disabled) goToScreen(Number(button.dataset.stepTarget));
   }));
@@ -257,7 +283,7 @@ function init() {
     input.focus();
   }));
   byId("agroWizardForm").addEventListener("submit", submitForm);
-  byId("btnRetry").addEventListener("click", submitForm);
+  byId("btnRetry").addEventListener("click", () => submitForm(undefined, state.retryConfirmed));
   byId("btnExportJson").addEventListener("click", exportResult);
 }
 
