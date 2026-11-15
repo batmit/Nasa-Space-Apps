@@ -21,6 +21,39 @@ arquivo `index.html`: os módulos JavaScript e as chamadas usam a mesma origem.
 As dependências visuais (Tailwind, Leaflet, Lucide, fontes e mapas) usam CDN e
 precisam de conexão à internet.
 
+## Deploy na Vercel
+
+Importe este repositório na Vercel com **Root Directory na raiz do repositório
+(`.`)**. O `vercel.json` seleciona o preset **FastAPI** e configura o limite da
+função em 300 segundos. Deixe **Build Command**, **Install Command** e
+**Output Directory** nos padrões do preset; não configure um build npm.
+
+O `pyproject.toml` aponta para `src.backend.main:app`, a `.python-version`
+seleciona Python 3.12 e as dependências continuam em `requirements.txt`.
+O próprio FastAPI já serve a interface: `/` abre o frontend e `/api/v1/*`
+atende a API na mesma origem, sem precisar alterar os caminhos do JavaScript.
+
+Em **Settings → Environment Variables**, configure os valores necessários
+para **Production** e **Preview**:
+
+| Variável | Uso |
+| --- | --- |
+| `EMBRAPA_ACCESS_TOKEN` | Habilitar a consulta Agritec/ZARC. |
+| `EMBRAPA_RESPONDEAGRO_TOKEN` | Token específico da RespondeAgro, quando diferente do token Agritec. |
+| `GEMINI_API_KEY` | Habilitar a orientação por IA. |
+| `GEMINI_MODEL` | Opcional: substituir o modelo definido no backend. |
+| `NOMINATIM_USER_AGENT` | Identificar a aplicação e o contato do responsável. |
+| `NOMINATIM_BASE_URL` | Opcional: substituir o provedor padrão de geocodificação. |
+
+Cadastre os segredos diretamente na Vercel; não envie arquivos `.env`.
+Depois de alterar as variáveis, faça um novo deploy para aplicá-las.
+A `.vercelignore` exclui ambientes locais, segredos, caches e arquivos de teste
+dos uploads feitos pela CLI; `.vercel/` fica fora do Git.
+
+Após o deploy, confira `/`, `/api/v1/health` e uma consulta pelo formulário.
+O health verifica apenas se a API responde. Na Vercel, o cache NASA usa
+`/tmp/nasa_power`; ele é temporário e pode ser descartado entre execuções.
+
 ## Interface integrada
 
 O layout importado de `agroorbit-frontend-v4-unificado.zip` mantém o fluxo de
@@ -238,6 +271,17 @@ como estimativa; abaixo disso o total é omitido. A quantidade de
 observações completas de cada mês permanece explícita em `anos_chuva_completos`.
 Radiação é normalizada para **MJ/m²/dia** e a umidade é **relativa do ar a 2 m**,
 não umidade das raízes. Lacunas e limitações são apresentadas na resposta.
+
+O campo `resumo_climatico.projecao_chuva` estima os próximos 12 meses completos,
+começando no mês seguinte ao da consulta. Para cada mês futuro, repete a média
+dos totais daquele mês do ano encontrados nos 18 meses históricos. Por exemplo,
+dois janeiros com 180 e 220 mm geram uma estimativa de 200 mm para o próximo janeiro.
+Cada item informa ano, mês, `precipitacao_estimada_mm` e quantidade de meses
+históricos completos utilizados; `total_estimado_mm` soma as 12 estimativas.
+Se um mês não tiver histórico completo, sua estimativa e o total ficam ausentes,
+sem tratar lacunas como zero. O frontend exibe as estimativas e o total.
+É uma projeção sazonal simples para o protótipo, sem treinamento ou novas
+dependências; assume repetição do padrão recente, não uma previsão meteorológica validada.
 
 As regras de manejo são separadas da coleta e explicam seus fundamentos:
 

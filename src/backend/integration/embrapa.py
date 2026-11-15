@@ -70,10 +70,7 @@ class _AgroAPIClient:
     def _get(self, recurso: str, parametros: dict[str, str | int] | None = None) -> object:
         return self._request(recurso, parametros=parametros)
 
-    def _request(
-        self, recurso: str, *, parametros: dict[str, str | int] | None = None,
-        payload: dict | None = None,
-    ) -> object:
+    def _request(self, recurso: str, *, parametros: dict[str, str | int] | None = None, payload: dict | None = None,) -> object:
         url = f"{self.BASE_URL}/{recurso}"
         if parametros:
             url += "?" + urlencode(parametros)

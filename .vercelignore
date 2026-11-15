@@ -1,0 +1,13 @@
+.venv/
+.pytest_cache/
+**/__pycache__/
+**/*.py[cod]
+.env*
+**/.env*
+**/node_modules/
+**/test-results/
+**/playwright-report/
+src/backend/data/
+src/backend/tests/
+src/frontend/tests/
+src/frontend/playwright.config.js

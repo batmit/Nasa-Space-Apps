@@ -216,6 +216,40 @@ test("resumo NASA exibe unidades corretas e limpa métricas quando indisponível
   assert.match(nodes.get("nasaStatus").textContent, /Consulte novamente/);
 });
 
+test("projeção exibe doze meses futuros, distingue lacunas de zero e limpa consulta anterior", (context) => {
+  const nodes = new Map();
+  globalThis.document = {
+    createElement: (tag) => new Element(tag),
+    getElementById: (id) => {
+      if (!nodes.has(id)) nodes.set(id, new Element("div"));
+      return nodes.get(id);
+    },
+  };
+  context.after(() => { delete globalThis.document; });
+  const climate = { meses: [], projecao_chuva: {
+    total_estimado_mm: null, aviso: "Estimativa sazonal, não validada.",
+    meses: Array.from({ length: 12 }, (_, i) => ({
+      ano: i === 0 ? 2026 : 2027, mes: i === 0 ? 12 : i,
+      precipitacao_estimada_mm: i === 1 ? null : 0, meses_historicos_utilizados: i === 1 ? 0 : 1,
+    })),
+  } };
+  renderClimate(climate, true);
+  assert.equal(nodes.get("forecastPanel").hidden, false);
+  const table = nodes.get("forecastTable").children[0];
+  const rows = table.children[1].children;
+  assert.equal(rows.length, 12);
+  assert.equal(rows[0].children[0].textContent, "Dez/2026");
+  assert.equal(rows[11].children[0].textContent, "Nov/2027");
+  assert.equal(rows[0].children[1].textContent.trim(), "0");
+  assert.equal(rows[1].children[1].textContent, "Dados insuficientes");
+  assert.match(nodes.get("forecastTotal").textContent, /Dados insuficientes/);
+  renderClimate({ meses: [] }, true);
+  assert.equal(nodes.get("climateMonthly").children.length, 1);
+  assert.equal(nodes.get("climateMetrics").children.length, 5);
+  assert.equal(nodes.get("forecastPanel").hidden, true);
+  assert.equal(nodes.get("forecastTable").children.length, 0);
+});
+
 test("janelas condicionais ficam separadas das confirmadas e são limpas ao repetir consulta", (context) => {
   const nodes = new Map();
   globalThis.document = {
