@@ -13,5 +13,15 @@ app = FastAPI(
 
 app.include_router(router, prefix="/api/v1")
 
+
+class FrontendFiles(StaticFiles):
+    """Revalida HTML e módulos para não misturar versões da interface."""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 # API e interface compartilham origem; as rotas da API são registradas primeiro.
-app.mount("/", StaticFiles(directory=Path(__file__).resolve().parents[1] / "frontend", html=True), name="frontend")
+app.mount("/", FrontendFiles(directory=Path(__file__).resolve().parents[1] / "frontend", html=True), name="frontend")

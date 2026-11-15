@@ -18,38 +18,60 @@ export function renderResults(data, onChooseCulture, onReviewSoil) {
     throw new Error("O resultado recebido não está no formato esperado. Tente novamente.");
   }
   document.getElementById("resRegionBadge").textContent = `${data.municipio.nome}, ${data.municipio.uf}`;
-  document.getElementById("diagTitle").textContent = data.status === "orientacao_condicional"
-    ? "Orientações disponíveis — confira as condições" : "Precisamos conferir algumas informações";
-  document.getElementById("diagText").textContent = data.cultura
-    ? `Cultura consultada: ${data.cultura.nome}. As janelas não substituem a avaliação da propriedade.`
-    : "A janela da cultura desejada não foi validada. Confira as orientações disponíveis e as pendências.";
+  const confirmed = data.janelas_confirmadas || data.janelas;
+  const ambiguous = data.status_zarc === "cultura_ambigua";
+  document.getElementById("diagTitle").textContent = ambiguous ? "Escolha a opção de cultura"
+    : confirmed.length ? "Há períodos compatíveis com seus dados"
+    : data.status_zarc === "classe_solo_pendente" ? "Falta confirmar a classe do solo"
+    : "O plantio ainda precisa ser validado";
+  document.getElementById("diagText").textContent = ambiguous
+    ? "Escolha a safra e o sistema de cultivo abaixo para ver os períodos de plantio."
+    : confirmed.length ? `${data.cultura?.nome || data.dados_informados.cultura_desejada}: confira o período do grupo de ciclo da sua cultivar.`
+    : data.status_zarc === "classe_solo_pendente" ? "Informe a classe AD da avaliação técnica. As opções de plantio ainda são condicionais."
+    : "Confira o motivo em “Quando plantar?” e as pendências de manejo abaixo.";
 
   const options = document.getElementById("cultureOptions");
+  document.getElementById("cultureSelection").classList.toggle("hidden", !data.opcoes_cultura.length);
   options.replaceChildren(...data.opcoes_cultura.map((option) => {
-    const button = element("button", `${option.nome} · ${option.cultivo || "modalidade a conferir"}`, "secondary-button");
+    const button = element("button", `Consultar ${option.nome}`, "secondary-button");
     button.type = "button";
     button.addEventListener("click", () => onChooseCulture(option));
     return button;
   }));
   renderZarc(data, onReviewSoil);
+  renderGemini(data);
+  const titles = {
+    conservacao_agua: "Conservar água", planejamento_climatico: "Planejar com o histórico climático",
+    cobertura_solo: "Proteger e diversificar o solo", epoca_plantio: "Conferir a época de plantio",
+    validar_solo_zarc: "Confirmar a classe do solo",
+  };
   const recommendations = document.getElementById("recommendations");
-  recommendations.replaceChildren(...data.orientacoes.map((item) => {
-    const section = element("div", "");
-    section.append(element("p", item.texto), element("p", `Fonte: ${item.fonte}`, "text-sm text-slate-500"));
-    for (const evidence of item.evidencias || []) section.append(element("p", evidence, "text-sm text-slate-600 mt-1"));
+  recommendations.replaceChildren(...data.orientacoes.map((item, index) => {
+    const section = element("article", "", "guidance-item");
+    section.append(element("h4", titles[item.tema] || `Orientação ${index + 1}`, "guidance-title"),
+      element("p", item.texto, "guidance-text"));
+    const details = element("details", "", "guidance-evidence");
+    details.append(element("summary", "Fontes e dados utilizados"),
+      element("p", `Fonte: ${item.fonte}`, "guidance-source"));
+    for (const evidence of item.evidencias || []) details.append(element("p", evidence, "guidance-source"));
     try {
       const url = new URL(item.url_fonte);
       if (url.protocol === "https:") {
         const link = element("a", "Fundamentação da orientação", "reference-link");
         link.href = url.href; link.target = "_blank"; link.rel = "noopener noreferrer";
-        section.append(link);
+        details.append(link);
       }
     } catch { /* Fonte sem link público. */ }
+    section.append(details);
     return section;
   }));
   if (!data.orientacoes.length) recommendations.append(element("p", "Não há orientação conclusiva para esta consulta."));
   list("pendingItems", data.pendencias, "Nenhuma pendência adicional registrada.");
   list("warningItems", data.avisos, "Nenhum aviso adicional retornado.");
+  document.getElementById("pendingCount").textContent = String(data.pendencias.length);
+  document.getElementById("warningCount").textContent = String(data.avisos.length);
+  document.getElementById("pendingDetails").open = data.pendencias.length > 0;
+  document.getElementById("warningDetails").open = false;
   list("resultSources", data.fontes, "Nenhuma fonte informada.");
   const references = document.getElementById("technicalReferences");
   references.replaceChildren(...data.referencias.map((item) => {
@@ -70,6 +92,39 @@ export function renderResults(data, onChooseCulture, onReviewSoil) {
   }));
   if (!data.referencias.length) references.append(element("p", "Nenhuma referência foi retornada nesta consulta."));
   renderClimate(data.resumo_climatico, data.analise_climatica_realizada);
+}
+
+export function renderGemini(data) {
+  const summary = document.getElementById("aiSummary");
+  const actions = document.getElementById("aiActions");
+  summary.textContent = "";
+  actions.replaceChildren();
+  const output = data.explicacao_ia;
+  const available = data.status_ia === "disponivel" && typeof output?.resumo === "string"
+    && Array.isArray(output.actions);
+  const panel = document.getElementById("aiGuidance");
+  panel.classList.toggle("hidden", !available);
+  document.getElementById("fallbackGuidance").classList.toggle("hidden", available);
+  document.getElementById("diagText").classList.toggle("hidden", available);
+  document.getElementById("aiUnavailable").classList.toggle("hidden",
+    data.status_ia !== "indisponivel" && !(data.status_ia === "disponivel" && !available));
+  if (!available) return;
+  document.getElementById("diagTitle").textContent = "Sua orientação personalizada";
+  summary.textContent = output.resumo;
+  const evidenceLabel = (id) => id === "usuario" ? "Dados informados"
+    : id === "nasa:resumo" ? "Histórico NASA"
+    : id.startsWith("zarc:condicional:") ? "Período ZARC condicional"
+    : id.startsWith("zarc:janela:") ? "Período ZARC compatível"
+    : id.startsWith("embrapa:referencia:") ? "Publicação da Embrapa" : "Evidência a conferir";
+  actions.replaceChildren(...output.actions.map((action) => {
+    const item = element("li", "");
+    item.append(element("p", action.description));
+    const evidence = element("details", "", "guidance-evidence");
+    evidence.append(element("summary", "Dados utilizados"), element("p",
+      [...new Set((action.evidencias || []).map(evidenceLabel))].join(" · ")));
+    item.append(evidence);
+    return item;
+  }));
 }
 
 export function renderZarc(data, onReviewSoil) {
@@ -93,20 +148,25 @@ export function renderZarc(data, onReviewSoil) {
   document.getElementById("zarcStatus").textContent = labels[data.status_zarc] || "ZARC: confira o resultado da consulta";
   document.getElementById("zarcMessage").textContent = data.mensagem_zarc || "Confira as pendências e as condições de cada período.";
   const card = (window, conditional) => {
-    const article = element("article", "", conditional ? "result-card conditional-window" : "result-card");
-    article.append(element("h4", window.cultura, "font-extrabold"),
+    const article = element("article", "", conditional ? "planting-item conditional-window" : "planting-item");
+    article.append(element("h4", window.ciclo, "result-subtitle"),
       element("p", `${window.dia_inicio}/${window.mes_inicio} a ${window.dia_fim}/${window.mes_fim}`, "window-period"),
-      element("p", `Solo: ${window.solo} · Ciclo: ${window.ciclo}`),
-      element("p", `Safra: ${window.safra_inicio}/${window.safra_fim} · Nível ZARC: ${window.risco}%`),
-      element("p", window.portaria, "text-sm text-slate-600"));
+      element("p", `Solo ${window.solo} · Safra ${window.safra_inicio}/${window.safra_fim} · Risco ${window.risco}%`, "planting-meta"));
+    const source = element("details", "", "guidance-evidence");
+    source.append(element("summary", "Cultura e portaria"), element("p", window.cultura), element("p", window.portaria));
+    article.append(source);
     if (conditional) article.append(element("p", window.condicao, "font-bold text-amber-900 mt-3"));
     return article;
   };
   const confirmed = data.janelas_confirmadas || data.janelas || [];
   const conditional = data.janelas_condicionais || [];
   const windows = document.getElementById("plantingWindows");
+  document.getElementById("confirmedWindowsSection").classList.toggle("hidden", !confirmed.length);
+  document.getElementById("confirmedWindowsSection").open = false;
   windows.replaceChildren(...confirmed.map((window) => card(window, false)));
-  if (!confirmed.length) windows.append(element("p", "Nenhuma janela foi confirmada para os filtros informados."));
+  if (!confirmed.length) windows.append(element("p", data.status_zarc === "cultura_ambigua"
+    ? "Aguardando sua escolha de cultura acima para consultar as janelas."
+    : "Nenhuma janela foi confirmada para os filtros informados."));
   document.getElementById("conditionalWindows").replaceChildren(...conditional.map((window) => card(window, true)));
   document.getElementById("conditionalWindowsSection").classList.toggle("hidden", !conditional.length);
   const button = document.getElementById("btnReviewSoil");

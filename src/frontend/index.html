@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=20261114-personalizado-6" />
 </head>
 <body class="bg-[#F6F8F5] text-slate-900 antialiased h-screen overflow-hidden flex flex-col">
 
@@ -232,15 +232,19 @@
             <hr class="border-slate-200" />
 
             <details id="zarcSoilDetails" class="result-card">
-              <summary class="font-extrabold cursor-pointer">Conhece a classe do solo no ZARC?</summary>
-              <label for="zarcSoilClass" class="block text-sm font-bold mt-3">Classificação de disponibilidade de água do solo</label>
-              <p class="text-xs text-slate-600 mt-1 mb-2">Informe somente uma classe conhecida por avaliação técnica. Não deduza AD1–AD6 apenas pela textura ou profundidade. Se não souber, mantenha a opção abaixo.</p>
-              <select id="zarcSoilClass" class="w-full rounded-xl border-2 border-slate-300 px-3 py-3 bg-white">
+              <summary class="font-extrabold cursor-pointer">Classe do solo no ZARC <span class="text-xs font-normal text-slate-500">(opcional)</span></summary>
+              <label for="zarcSoilClass" class="block text-sm font-bold mt-3">Água disponível para as plantas</label>
+              <p id="zarcSoilHelp" class="text-xs text-slate-600 mt-1 mb-2">De AD1 a AD6, aumenta a quantidade de água que o solo disponibiliza às plantas. Informe a classe indicada na avaliação técnica.</p>
+              <select id="zarcSoilClass" aria-describedby="zarcSoilHelp zarcSoilNote" class="w-full rounded-xl border-2 border-slate-300 px-3 py-3 bg-white text-sm">
                 <option value="">Não sei — usar o tipo de solo informado</option>
-                <option value="AD1">AD1</option><option value="AD2">AD2</option>
-                <option value="AD3">AD3</option><option value="AD4">AD4</option>
-                <option value="AD5">AD5</option><option value="AD6">AD6</option>
+                <option value="AD1">AD1 — Menor disponibilidade de água</option>
+                <option value="AD2">AD2 — Disponibilidade baixa de água</option>
+                <option value="AD3">AD3 — Disponibilidade intermediária menor</option>
+                <option value="AD4">AD4 — Disponibilidade intermediária maior</option>
+                <option value="AD5">AD5 — Disponibilidade alta de água</option>
+                <option value="AD6">AD6 — Maior disponibilidade de água</option>
               </select>
+              <p id="zarcSoilNote" class="text-xs text-slate-500 mt-2">As descrições são explicativas. Textura e profundidade, isoladamente, não definem a classe AD.</p>
             </details>
 
             <!-- C. Acidez da Terra (chave unificada: ph) -->
@@ -409,7 +413,7 @@
         <div id="loadingIndicator" class="hidden result-panel text-center" role="status" aria-live="polite">
           <div class="w-12 h-12 border-4 border-emerald-700 border-t-transparent rounded-full animate-spin mx-auto"></div>
           <h2 class="font-extrabold text-lg mt-4">Consultando NASA POWER e Embrapa...</h2>
-          <p>Analisando o histórico climático, as janelas de plantio e as referências técnicas para sua área. A primeira consulta pode levar mais tempo.</p>
+          <p class="result-next-step">Buscando períodos de plantio, histórico do clima e orientações para sua área. Isso pode levar alguns instantes.</p>
         </div>
         <div id="requestError" class="hidden result-panel" role="alert">
           <h2 class="font-extrabold text-lg">Não foi possível concluir a consulta</h2>
@@ -417,70 +421,90 @@
           <button type="button" id="btnRetry" class="action-button mt-4">Tentar novamente</button>
           <button type="button" id="btnErrorEdit" class="secondary-button mt-4">Revisar dados</button>
         </div>
-        <div id="backendResultsWrapper" class="hidden space-y-6" aria-live="polite">
-          <div class="result-panel bg-slate-900 text-white flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h2 class="font-extrabold text-xl">Orientações para sua área</h2>
-              <p id="resRegionBadge" class="text-emerald-300 mt-1"></p>
+        <div id="backendResultsWrapper" class="hidden result-stack" aria-live="polite">
+          <div class="result-panel result-overview">
+            <div class="result-toolbar">
+              <p id="resRegionBadge" class="result-location"></p>
+              <button type="button" id="btnEditInputs" class="secondary-button">Revisar dados</button>
             </div>
-            <div class="flex gap-2">
-              <button type="button" id="btnEditInputs" class="secondary-button">Alterar dados</button>
-              <button type="button" id="btnExportJson" class="action-button">Baixar resultado</button>
+            <h2 id="diagTitle" class="result-headline"></h2>
+            <p id="diagText" class="result-next-step"></p>
+            <div id="aiGuidance" class="hidden ai-primary">
+              <p id="aiSummary" class="result-next-step"></p>
+              <ol id="aiActions" class="ai-action-list"></ol>
+              <p class="result-caution">Personalizado pelo Gemini com os dados desta consulta.</p>
             </div>
+            <p id="aiUnavailable" class="hidden guidance-source" role="status">A personalização está indisponível. Confira as orientações gerais e as pendências abaixo.</p>
+            <p class="result-caution">Orientações condicionais. Confira solo, ciclo e safra com assistência técnica antes de plantar.</p>
           </div>
           <div class="result-panel">
-            <h3 id="diagTitle" class="font-extrabold text-lg"></h3>
-            <p id="diagText" class="mt-2 text-slate-600"></p>
-            <div id="cultureOptions" class="flex flex-wrap gap-2 mt-3"></div>
-          </div>
-          <div class="result-panel">
-            <h3 class="font-extrabold text-lg">Janelas de plantio — ZARC</h3>
-            <p class="text-sm text-slate-600 mt-1">Cada período se aplica somente ao solo, ciclo e safra indicados.</p>
-            <p id="zarcStatus" class="font-bold mt-3" role="status"></p>
-            <p id="zarcMessage" class="text-sm text-slate-600 mt-2"></p>
-            <h4 class="font-extrabold mt-4">Janelas compatíveis com os filtros informados</h4>
-            <div id="plantingWindows" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4"></div>
+            <h3 class="result-section-title">Quando plantar?</h3>
+            <p id="zarcStatus" class="result-status" role="status"></p>
+            <div id="cultureSelection" class="hidden mt-4">
+              <p class="text-sm text-slate-600">Escolha uma opção. A consulta continua com os dados já preenchidos.</p>
+              <div id="cultureOptions" class="culture-choice-list"></div>
+            </div>
+            <details id="confirmedWindowsSection" class="result-more mt-4">
+              <summary>Ver períodos compatíveis por ciclo</summary>
+              <div id="plantingWindows" class="planting-list"></div>
+            </details>
             <div id="conditionalWindowsSection" class="hidden mt-5">
-              <h4 class="font-extrabold text-amber-900">Janelas condicionais — classificação do solo pendente</h4>
-              <p class="text-sm text-amber-900 mt-1">Estes períodos não validam o plantio na propriedade. Cada opção exige confirmar a classificação de solo indicada.</p>
+              <h4 class="font-extrabold text-amber-900">Confirme o solo antes de usar estes períodos</h4>
+              <p class="text-sm text-amber-900 mt-1">As opções abaixo são condicionais e ainda não validam o plantio.</p>
               <button type="button" id="btnReviewSoil" class="secondary-button mt-3">Revisar classificação do solo</button>
-              <div id="conditionalWindows" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4"></div>
+              <details class="result-more mt-3"><summary>Ver períodos condicionais</summary>
+                <div id="conditionalWindows" class="planting-list"></div>
+              </details>
             </div>
             <details class="mt-4 text-sm">
               <summary class="font-bold cursor-pointer">Detalhes da consulta ZARC</summary>
+              <p id="zarcMessage" class="text-sm text-slate-600 mt-2"></p>
               <ul id="zarcDiagnostics" class="result-list"></ul>
             </details>
           </div>
-          <div class="result-panel">
-            <h3 class="font-extrabold text-lg">Orientações e condições</h3>
-            <div id="recommendations" class="space-y-3 mt-3"></div>
-            <h4 class="font-extrabold mt-5">Pendências</h4>
-            <ul id="pendingItems" class="result-list"></ul>
-            <h4 class="font-extrabold mt-5">Avisos e limitações</h4>
-            <ul id="warningItems" class="result-list"></ul>
+          <div class="result-panel guidance-panel">
+            <div id="fallbackGuidance">
+              <h3 class="result-section-title">Como cuidar da área?</h3>
+              <p class="guidance-intro">Orientações gerais · personalização indisponível nesta consulta.</p>
+              <div id="recommendations" class="guidance-list"></div>
+            </div>
+            <details id="pendingDetails" class="guidance-disclosure guidance-pending">
+              <summary>Pendências para validar <span id="pendingCount" class="guidance-count"></span></summary>
+              <ul id="pendingItems" class="result-list"></ul>
+            </details>
+            <details id="warningDetails" class="guidance-disclosure">
+              <summary>Avisos e limitações <span id="warningCount" class="guidance-count"></span></summary>
+              <ul id="warningItems" class="result-list"></ul>
+            </details>
           </div>
-          <div class="result-panel">
-            <h3 class="font-extrabold text-lg">Referências técnicas da Embrapa</h3>
+          <details class="result-panel result-more" id="technicalDetails">
+            <summary>Dados e fontes da consulta</summary>
+          <details class="guidance-disclosure result-more">
+            <summary>Publicações da Embrapa</summary>
             <p class="text-sm text-slate-600 mt-1">Conteúdo de publicações; a aplicação à propriedade exige avaliação das condições locais.</p>
             <div id="technicalReferences" class="space-y-4 mt-4"></div>
-          </div>
-          <div class="result-panel" id="nasaPanel">
-            <h3 class="font-extrabold text-lg">Dados climáticos</h3>
+          </details>
+          <details class="guidance-disclosure result-more" id="nasaPanel">
+            <summary>Histórico do clima · NASA</summary>
             <p id="nasaStatus" class="text-slate-600 mt-2">Análise climática indisponível nesta consulta.</p>
             <div id="climateMetrics" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4"></div>
-            <div id="climateMonthly" class="mt-4 overflow-x-auto"></div>
-          </div>
-          <div class="result-panel text-sm">
-            <h3 class="font-extrabold">Fontes consultadas</h3>
+            <details class="result-more mt-4"><summary>Ver mês a mês</summary>
+              <div id="climateMonthly" class="mt-4 overflow-x-auto"></div>
+            </details>
+          </details>
+          <details class="guidance-disclosure result-more text-sm">
+            <summary>Fontes e arquivo da consulta</summary>
             <ul id="resultSources" class="result-list"></ul>
             <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>
-          </div>
+            <button type="button" id="btnExportJson" class="secondary-button result-export">Baixar dados da consulta (JSON)</button>
+          </details>
+          </details>
         </div>
       </div>
     </section>
 
   </form>
 
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=20261114-personalizado-6"></script>
 </body>
 </html>

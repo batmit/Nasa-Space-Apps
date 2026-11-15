@@ -82,7 +82,7 @@ class RecomendacaoTests(unittest.TestCase):
 
     def test_contrato_frontend_preserva_contexto_e_avisa_divergencia(self):
         payload = self.client.post("/api/v1/recomendar", json=ENTRADA).json()
-        self.assertEqual(payload["dados_informados"], dict(ENTRADA, id_cultura=None))
+        self.assertEqual(payload["dados_informados"], dict(ENTRADA, id_cultura=None, tipo_solo_informado=None))
         self.assertEqual(payload["municipio"]["codigo_ibge"], 3502804)
         self.assertTrue(any("difere" in aviso for aviso in payload["avisos"]))
         self.assertIn("recuperar solo", self.referencias.buscar_referencias.call_args.args[0])
@@ -143,6 +143,16 @@ class RecomendacaoTests(unittest.TestCase):
             self.assertEqual(self.client.get("/" + asset).status_code, 200)
         self.assertIn("/api/v1/recomendar", self.client.get("/api.js").text)
         self.assertEqual(self.client.get("/docs").status_code, 200)
+
+    def test_interface_revalida_arquivos_e_respostas_condicionais(self):
+        for path in ("/", "/app.js", "/api.js", "/results.js", "/styles.css"):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.headers["cache-control"], "no-cache")
+                conditional = self.client.get(path, headers={"If-None-Match": response.headers["etag"]})
+                self.assertEqual(conditional.status_code, 304)
+                self.assertEqual(conditional.headers["cache-control"], "no-cache")
 
     def test_localizacao_independe_de_token_embrapa(self):
         self.localizador.buscar_localizacao.return_value = LocalizacaoSelecionada(

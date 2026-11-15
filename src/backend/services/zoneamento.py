@@ -50,10 +50,11 @@ def _selecionar(dados: DadosAgricultor, resposta: RecomendacaoResponse,
             return None
         return selecionadas[0]
 
-    exatas = [c for c in compativeis if desejada in _nomes(c)]
-    if len(exatas) == 1:
-        return exatas[0]
-    candidatas = exatas or [c for c in compativeis if any(nome.startswith(desejada + " ") for nome in _nomes(c))]
+    candidatas = [c for c in compativeis if any(
+        nome == desejada or nome.startswith(desejada + " ") for nome in _nomes(c)
+    )]
+    if len(candidatas) == 1:
+        return candidatas[0]
     if candidatas:
         resposta.opcoes_cultura = [_opcao(c) for c in candidatas]
         _informar(resposta, "cultura_ambigua", "Selecione uma das opções de cultura do município para confirmar a safra e a modalidade. Nenhum ID foi escolhido automaticamente.")
