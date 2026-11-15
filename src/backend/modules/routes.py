@@ -33,7 +33,7 @@ def obter_orientador_ia():
     from ..integration.gemini_api import GeminiClient
     client = genai.Client(
         api_key=os.environ["GEMINI_API_KEY"],
-        http_options={"timeout": 30000},
+        http_options={"timeout": 60000},
     )
     return GeminiClient(client, model=os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"))
 

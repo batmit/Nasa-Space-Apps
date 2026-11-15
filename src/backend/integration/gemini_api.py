@@ -89,7 +89,7 @@ class GeminiClient:
                     "schema": StructuredGeminiOutput.model_json_schema(),
                 },
                 store=False,
-                timeout=30.0,
+                timeout=60.0,
             )
             resultado = StructuredGeminiOutput.model_validate_json(interaction.output_text)
             permitidas = set(contexto["evidencias_contexto"])

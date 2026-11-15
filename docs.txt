@@ -1,9 +1,0 @@
-1. Qual o problema central que estamos enfrentando?
-2. Com o problema definido, pensamos na solução. Como os dados suportam essa solução que criamos? Como eles foram importantes para criar essa solução?
-3. Qual a importância do nosso produto? Quantas pessoas ela impacta? Quanto mais, melhor.
-
-Reduzir riscos para pequenos e médios agricultores.
-Facilitar/democratizar acesso. Pessoas leigas. Quanto mais opções de acesso melhor (vulnerabilidade). Prefeituras.
-
-Machine Learning:
-    Sistema de recomendação. Produtor nao saber o que pode plantar. Banco de dados de garfos? (Ideia)
