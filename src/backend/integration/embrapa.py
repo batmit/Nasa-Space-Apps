@@ -70,22 +70,19 @@ class _AgroAPIClient:
     def _get(self, recurso: str, parametros: dict[str, str | int] | None = None) -> object:
         return self._request(recurso, parametros=parametros)
 
-    def _request(
-        self, recurso: str, *, parametros: dict[str, str | int] | None = None,
-        payload: dict | None = None,
-    ) -> object:
+    def _request(self, recurso: str, *, parametros: dict[str, str | int] | None = None, payload: dict | None = None,) -> object:
         url = f"{self.BASE_URL}/{recurso}"
         if parametros:
             url += "?" + urlencode(parametros)
-        request = Request(
-            url,
-            data=json.dumps(payload).encode("utf-8") if payload is not None else None,
-            headers={
-                "Accept": "application/json", "Authorization": f"Bearer {self._token}",
-                "Content-Type": "application/json",
-                "Accept-Encoding": "gzip",
-            },
-        )
+            request = Request(
+                url,
+                data=json.dumps(payload).encode("utf-8") if payload is not None else None,
+                headers={
+                    "Accept": "application/json", "Authorization": f"Bearer {self._token}",
+                    "Content-Type": "application/json",
+                    "Accept-Encoding": "gzip",
+                },
+            )
         try:
             with urlopen(request, timeout=self._timeout) as response:
                 body = response.read()
