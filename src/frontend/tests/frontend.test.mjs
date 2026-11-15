@@ -101,7 +101,7 @@ test("resultado renderiza orientações como texto e limpa dados da consulta ant
     avisos: ["Análise climática indisponível.", "Orientação por IA indisponível."],
   }, () => {});
   assert.equal(nodes.get("warningCount").textContent, "1");
-  assert.match(nodes.get("pendingItems").children[0].textContent, /Consulte novamente o ZARC/);
+  assert.match(nodes.get("pendingItems").children[0].textContent, /Consulte novamente o zoneamento/);
   assert.doesNotMatch(nodes.get("warningItems").children[0].textContent, /indisponível/i);
   renderResults({ ...data, referencias: [] }, () => {});
   assert.throws(() => renderResults({}, () => {}), /formato/);
@@ -172,13 +172,20 @@ test("resumo NASA exibe unidades corretas e limpa métricas quando indisponível
     temperatura_media_c: 20, umidade_relativa_ar_pct: 70, radiacao_media_mj_m2_dia: 14.4,
     maior_sequencia_dias_sem_chuva: 20, meses: [{ mes: 1, precipitacao_media_mm: 100, temperatura_media_c: 20, anos_chuva_completos: 3 }],
   }, true);
-  assert.match(nodes.get("nasaStatus").textContent, /2023-01-01/);
+  assert.equal(nodes.get("nasaStatus").textContent, "");
   assert.equal(nodes.get("climateMetrics").children[2].children[0].textContent, "Umidade relativa do ar a 2 m");
   assert.match(nodes.get("climateMetrics").children[3].children[1].textContent, /MJ\/m²\/dia/);
   assert.equal(nodes.get("climateChart").children[0].tag, "figure");
   const bar = nodes.get("climateChart").children[0].children[2].children[0].children[0].children[1].children[0];
   assert.equal(bar.style.height, "100%");
   assert.match(nodes.get("climateChart").children[0].children[2].children[0].children[0].attributes["aria-label"], /Jan: chuva 100 mm; temperatura 20 °C/);
+  renderClimate({
+    data_inicio: "2025-05-01", data_fim: "2026-10-31", anos_chuva_completos: 0,
+    precipitacao_media_anual_mm: null, temperatura_media_c: 20,
+    umidade_relativa_ar_pct: 70, radiacao_media_mj_m2_dia: 14.4,
+    maior_sequencia_dias_sem_chuva: 20, meses: [],
+  }, true);
+  assert.equal(nodes.get("climateMetrics").children[0].children[1].textContent, "Sem ano civil completo no período");
   renderClimate(null, false);
   assert.equal(nodes.get("climateMetrics").children.length, 0);
   assert.equal(nodes.get("climateChart").children.length, 0);
@@ -207,7 +214,7 @@ test("janelas condicionais ficam separadas das confirmadas e são limpas ao repe
   assert.equal(nodes.get("conditionalWindowsSection").hidden, false);
   assert.equal(nodes.get("confirmedWindowsSection").hidden, true);
   assert.equal(nodes.get("btnReviewSoil").onclick, review);
-  assert.match(nodes.get("zarcStatus").textContent, /confirme/);
+  assert.equal(nodes.get("zarcStatus").textContent, "");
   renderZarc({ status_zarc: "disponivel", janelas_confirmadas: [window,
     { ...window, dia_inicio: 1, mes_inicio: 12, dia_fim: 20, mes_fim: 12 }], janelas_condicionais: [] });
   assert.equal(nodes.get("plantingWindows").children[0].tag, "article");
@@ -228,11 +235,13 @@ test("terceira tela mantém IDs únicos e controles essenciais fora de blocos re
   assert.equal(ids.length, new Set(ids).size, "IDs duplicados podem deixar dados invisíveis ou desatualizados");
   const third = html.slice(html.indexOf('<section id="screen-3"'));
   assert.match(third, /Quando plantar\?/);
-  assert.match(third, /Orientação para sua área/);
+  assert.match(third, /Análise da sua área/);
+  assert.match(third, /O que fazer agora/);
   assert.match(third, /id="btnViewData"/);
   assert.match(third, /<div id="confirmedWindowsSection"/);
   assert.match(third, /<section[^>]*id="nasaPanel"/);
-  assert.ok(third.indexOf('id="nasaPanel"') > third.indexOf('id="confirmedWindowsSection"'));
+  assert.ok(third.indexOf('id="nasaPanel"') < third.indexOf('id="aiGuidance"'));
+  assert.ok(third.indexOf('id="aiGuidance"') < third.indexOf('id="confirmedWindowsSection"'));
   assert.ok(third.indexOf('id="nasaPanel"') < third.indexOf('id="technicalDetails"'));
   assert.doesNotMatch(third, /Publicações da Embrapa|technicalReferences/);
   assert.doesNotMatch(third.match(/<div id="cultureSelection"[\s\S]*?<\/div>/)[0], /<details/);
@@ -315,23 +324,18 @@ test("Gemini aparece como interpretação, preserva evidências e limpa dados an
   assert.equal(nodes.get("aiGuidance").hidden, false);
   assert.equal(nodes.get("fallbackGuidance").hidden, true);
   assert.equal(nodes.get("diagText").hidden, true);
-  assert.equal(nodes.get("diagTitle").textContent, "Seu próximo passo");
-  assert.equal(nodes.get("aiAttribution").hidden, false);
+  assert.equal(nodes.get("diagTitle").textContent, "Resumo da sua área");
   assert.equal(nodes.get("aiSummary").textContent, "<img src=x onerror=alert(1)>");
   const action = nodes.get("aiActions").children[0];
-  assert.equal(action.children[0].textContent, "Confirme a classe AD.");
-  assert.match(action.children[1].children[1].textContent, /condicional/);
-  assert.equal(nodes.get("aiPersonalizacaoConteudo").children.length, 2);
-  assert.match(nodes.get("aiPersonalizacaoConteudo").children[0].children[0].textContent, /5.5/);
-  assert.equal(nodes.get("aiPersonalizacaoConteudo").children[1].children[1].textContent, "Pouca água");
+  assert.equal(action.tag, "p");
+  assert.equal(action.textContent, "Confirme a classe AD.");
+  assert.equal(action.className, "ai-action-paragraph");
   renderGemini({ status_ia: "indisponivel", explicacao_ia: null });
   assert.equal(nodes.get("aiGuidance").hidden, true);
   assert.equal(nodes.get("aiSummary").textContent, "");
   assert.equal(nodes.get("aiActions").children.length, 0);
-  assert.equal(nodes.get("aiPersonalizacaoConteudo").children.length, 0);
   assert.equal(nodes.get("fallbackGuidance").hidden, false);
   assert.equal(nodes.get("diagText").hidden, false);
-  assert.equal(nodes.get("aiAttribution").hidden, true);
   renderGemini({ status_ia: "nao_configurado" });
   renderGemini({ status_ia: "disponivel", explicacao_ia: {} });
   assert.equal(nodes.get("aiGuidance").hidden, true);

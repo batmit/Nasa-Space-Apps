@@ -30,7 +30,8 @@ def resumir_clima(payload: dict, inicio: date, fim: date) -> ResumoClimatico:
     parametros = ("T2M", "T2M_MIN", "T2M_MAX", "PRECTOTCORR", "RH2M", "ALLSKY_SFC_SW_DWN")
     limpos: dict[str, dict[date, float]] = {key: {} for key in parametros}
     avisos = [
-        "O resumo descreve três anos completos recentes; não é previsão meteorológica nem projeção de mudança climática.",
+        f"O resumo descreve o histórico de {inicio:%d/%m/%Y} a {fim:%d/%m/%Y}; "
+        "não é previsão meteorológica nem projeção de mudança climática.",
         "Os dados NASA representam uma célula de grade, não uma medição no talhão.",
         "RH2M é umidade relativa do ar a 2 m; não representa umidade do solo ou das raízes.",
     ]
@@ -99,6 +100,13 @@ def resumir_clima(payload: dict, inicio: date, fim: date) -> ResumoClimatico:
             umidade_relativa_ar_pct=media_coberta("RH2M", dias_mes),
             radiacao_media_mj_m2_dia=media_coberta("ALLSKY_SFC_SW_DWN", dias_mes),
         ))
+    if not anuais:
+        avisos.append("Não há ano civil com chuva diária completa no período; a média anual não foi calculada.")
+    if any(mes.anos_chuva_completos < 2 for mes in meses):
+        avisos.append(
+            "Alguns meses têm menos de duas observações completas de chuva; "
+            "o histórico é insuficiente para a orientação de sazonalidade."
+        )
     maior = atual = 0
     for dia in datas:
         chuva = limpos["PRECTOTCORR"].get(dia)
@@ -119,14 +127,16 @@ def resumir_clima(payload: dict, inicio: date, fim: date) -> ResumoClimatico:
 
 
 class NasaClimaService:
-    """Adapta a coleta já existente; datas são definidas no backend."""
+    """Consulta os últimos 18 meses completos, sem incluir o mês em andamento."""
 
     def __init__(self, *, hoje: date | None = None):
         self._hoje = hoje
 
     def obter_resumo(self, latitude: float, longitude: float) -> ResumoClimatico:
-        ano = (self._hoje or date.today()).year
-        inicio, fim = date(ano - 3, 1, 1), date(ano - 1, 12, 31)
+        hoje = self._hoje or date.today()
+        ano_inicio, mes_inicio = divmod(hoje.year * 12 + hoje.month - 1 - 18, 12)
+        inicio = date(ano_inicio, mes_inicio + 1, 1)
+        fim = hoje.replace(day=1) - timedelta(days=1)
         try:
             payload = request_NASA_API(latitude, longitude, inicio.strftime("%Y%m%d"), fim.strftime("%Y%m%d"))
         except (NasaPowerError, OSError) as exc:

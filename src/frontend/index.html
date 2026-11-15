@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261115-gemini-dados-1" />
+  <link rel="stylesheet" href="styles.css?v=20261115-resultados-8" />
 </head>
 <body class="bg-[#F6F8F5] text-slate-900 antialiased h-screen overflow-hidden flex flex-col">
 
@@ -232,7 +232,7 @@
             <hr class="border-slate-200" />
 
             <details id="zarcSoilDetails" class="result-card">
-              <summary class="font-extrabold cursor-pointer">Classe do solo no ZARC <span class="text-xs font-normal text-slate-500">(opcional)</span></summary>
+              <summary class="font-extrabold cursor-pointer">Classe do solo no ZARC (zoneamento de risco climático) <span class="text-xs font-normal text-slate-500">(opcional)</span></summary>
               <label for="zarcSoilClass" class="block text-sm font-bold mt-3">Água disponível para as plantas</label>
               <p id="zarcSoilHelp" class="text-xs text-slate-600 mt-1 mb-2">De AD1 a AD6, aumenta a quantidade de água que o solo disponibiliza às plantas. Informe a classe indicada na avaliação técnica.</p>
               <select id="zarcSoilClass" aria-describedby="zarcSoilHelp zarcSoilNote" class="w-full rounded-xl border-2 border-slate-300 px-3 py-3 bg-white text-sm">
@@ -433,9 +433,19 @@
           <button type="button" id="btnCultureEdit" class="result-text-button mt-5">Revisar cultura e irrigação</button>
         </div>
         <div id="backendResultsWrapper" class="hidden result-stack" aria-live="polite">
+          <section class="result-panel result-climate-panel" id="nasaPanel" aria-labelledby="climateTitle">
+            <p class="result-eyebrow">1 · NASA POWER</p>
+            <h3 id="climateTitle" class="result-section-title">Histórico do clima na região</h3>
+            <p id="nasaStatus" class="text-slate-600 mt-2"></p>
+            <div id="climateMetrics" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4"></div>
+            <div id="climateChart" class="mt-5"></div>
+            <details class="result-more mt-4"><summary>Ver tabela mês a mês</summary>
+              <div id="climateMonthly" class="mt-4 overflow-x-auto"></div>
+            </details>
+          </section>
           <div class="result-panel result-overview">
             <div class="result-toolbar">
-              <p class="result-eyebrow">Orientação para sua área</p>
+              <p class="result-eyebrow">2 · Análise da sua área</p>
               <button type="button" id="btnViewData" class="result-text-button">Ver dados usados ↓</button>
             </div>
             <h2 id="diagTitle" class="result-headline"></h2>
@@ -443,21 +453,18 @@
             <p id="diagText" class="result-next-step"></p>
             <div id="aiGuidance" class="hidden ai-primary">
               <p id="aiSummary" class="result-next-step"></p>
-              <ol id="aiActions" class="ai-action-list"></ol>
-              <details id="aiPersonalizacao" class="result-more guidance-disclosure mt-4">
-                <summary>Como pH e restrições foram considerados</summary>
-                <div id="aiPersonalizacaoConteudo" class="ai-analysis-list"></div>
-              </details>
+              <h3 class="result-section-title result-recommendation-title">O que fazer agora</h3>
+              <div id="aiActions" class="ai-action-list"></div>
             </div>
             <div id="fallbackGuidance" class="hidden result-fallback">
+              <h3 class="result-section-title result-recommendation-title">O que fazer agora</h3>
               <div id="recommendations" class="guidance-list"></div>
             </div>
-            <p id="aiAttribution" class="hidden result-caution">Orientação personalizada pelo Gemini a partir dos dados desta consulta.</p>
             <div class="result-footer"><p class="result-caution">Confirme as condições do talhão antes de plantar.</p><button type="button" id="btnEditInputs" class="result-text-button">Revisar dados</button></div>
           </div>
           <div class="result-panel result-zarc-panel">
             <div class="result-toolbar result-zarc-heading">
-              <div><p class="result-eyebrow">Embrapa · ZARC</p><h3 class="result-section-title">Quando plantar?</h3></div>
+              <div><p class="result-eyebrow">3 · Embrapa · ZARC (zoneamento de risco climático)</p><h3 class="result-section-title">Quando plantar?</h3></div>
               <span id="zarcCount" class="result-count"></span>
             </div>
             <p id="zarcStatus" class="result-status" role="status"></p>
@@ -476,21 +483,11 @@
               <ul id="pendingItems" class="result-list"></ul>
             </details>
             <details class="mt-4 text-sm result-diagnostics">
-              <summary class="font-bold cursor-pointer">Detalhes da consulta ZARC</summary>
+              <summary class="font-bold cursor-pointer">Detalhes da consulta</summary>
               <p id="zarcMessage" class="text-sm text-slate-600 mt-2"></p>
               <ul id="zarcDiagnostics" class="result-list"></ul>
             </details>
           </div>
-          <section class="result-panel result-climate-panel" id="nasaPanel" aria-labelledby="climateTitle">
-            <p class="result-eyebrow">NASA POWER</p>
-            <h3 id="climateTitle" class="result-section-title">Histórico do clima</h3>
-            <p id="nasaStatus" class="text-slate-600 mt-2"></p>
-            <div id="climateMetrics" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4"></div>
-            <div id="climateChart" class="mt-5"></div>
-            <details class="result-more mt-4"><summary>Ver tabela mês a mês</summary>
-              <div id="climateMonthly" class="mt-4 overflow-x-auto"></div>
-            </details>
-          </section>
           <details class="result-panel result-more" id="technicalDetails">
             <summary>Dados e fontes da consulta</summary>
             <details id="warningDetails" class="guidance-disclosure">
@@ -510,6 +507,6 @@
 
   </form>
 
-  <script type="module" src="app.js?v=20261115-gemini-dados-1"></script>
+  <script type="module" src="app.js?v=20261115-clima-18m-1"></script>
 </body>
 </html>

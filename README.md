@@ -55,7 +55,7 @@ provedor contratado ou hospedagem própria conforme a política do serviço.
 - `src/backend/integration/embrapa.py`: clientes Agritec e RespondeAgro.
 - `src/backend/integration/localizacao.py`: coordenadas → município OpenStreetMap → código IBGE.
 - `src/backend/integration/nasa_power.py`: coleta NASA POWER e cache dos dados brutos.
-- `src/backend/services/clima.py`: qualidade dos dados e resumo dos últimos três anos completos.
+- `src/backend/services/clima.py`: qualidade dos dados e resumo dos últimos 18 meses completos.
 - `src/backend/services/manejo.py`: regras de orientação com evidências e referências.
 - `src/backend/services/zoneamento.py`: catálogo municipal, seleção e classificação das janelas ZARC.
 
@@ -197,10 +197,11 @@ para distinguir ausência de dados de janelas descartadas pelos filtros.
 
 A consulta inicial do frontend continua com dez campos; a escolha de uma
 opção específica pode acrescentar `id_cultura`. O backend escolhe
-os três anos completos anteriores ao ano atual (em 2026: 2023–2025) e chama a
+os 18 meses completos anteriores ao mês atual (em novembro de 2026:
+01/05/2025 a 31/10/2026), sem incluir o mês em andamento, e chama a
 função existente `request_NASA_API`. O cache em
 `src/backend/data/raw/nasa_power/` é reutilizado, fica fora do Git e mantém
-`response.json` e `metadata.json` para cada consulta. Dados de anos completos
+`response.json` e `metadata.json` para cada consulta. Dados em cache
 não têm expiração automática; `force_refresh=True` permite atualizar a coleta.
 
 `analise_climatica_realizada` é `true` somente quando o resumo foi calculado
@@ -209,6 +210,9 @@ temperatura média. `resumo_climatico` inclui período, cobertura por parâmetro
 médias mensais, chuva média anual, temperaturas, radiação e sequência máxima
 de dias com precipitação inferior a 1 mm/dia. Valores ausentes não viram zero.
 Totais de chuva exigem meses/anos completos; um total incompleto é omitido.
+Uma janela de 18 meses pode não conter um ano civil completo; nesse caso, a
+chuva média anual fica ausente e um aviso explica a limitação. A quantidade de
+observações completas de cada mês permanece explícita em `anos_chuva_completos`.
 Radiação é normalizada para **MJ/m²/dia** e a umidade é **relativa do ar a 2 m**,
 não umidade das raízes. Lacunas e limitações são apresentadas na resposta.
 
@@ -217,13 +221,16 @@ As regras de manejo são separadas da coleta e explicam seus fundamentos:
 - Janelas compatíveis → orientar o planejamento dentro das condições ZARC.
 - Sequências sem chuva observadas → orientar conservação de água e cobertura,
   distinguindo sequeiro de cultivo irrigado, sem calcular lâmina de irrigação.
-- Médias mensais válidas → contextualizar a sazonalidade em relação às janelas
+- Médias mensais válidas com pelo menos duas observações completas para cada
+  um dos 12 meses → contextualizar a sazonalidade em relação às janelas
   disponíveis; não ampliar a janela oficial nem prever as próximas chuvas.
+  A janela padrão de 18 meses não atende a esse requisito, portanto essa
+  orientação é omitida; os indicadores mensais continuam disponíveis.
 - Objetivo de recuperação/conservação → orientar cobertura e planejamento da
   diversificação, sem recomendar uma espécie sem validação local.
 
 Os itens em `orientacoes` possuem texto, fonte, evidências e link quando
-aplicável. O histórico recente de três anos não é uma normal climatológica,
+aplicável. O histórico recente de 18 meses não é uma normal climatológica,
 uma previsão de safra ou uma projeção de mudanças climáticas. Não há cálculo
 de dose de calcário/adubo nem garantia de produtividade, lucro ou aptidão.
 Restrições livres continuam registradas para avaliação técnica.

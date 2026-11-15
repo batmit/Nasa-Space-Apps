@@ -8,9 +8,13 @@ from ..models.gemini import (
 SYSTEM_PROMPT = """
 Responda em português do Brasil, com linguagem simples e concisa.
 Sua resposta será o conteúdo principal da tela do agricultor.
-Escreva um resumo com no máximo duas frases e 360 caracteres e até três ações,
-cada uma com uma frase de até 220 caracteres. Priorize o próximo passo,
-o objetivo e as restrições do agricultor. Evite repetir dados, listar métricas,
+Depois do histórico climático da NASA, o agricultor verá seu resumo e as ações.
+Sintetize em até duas frases e 360 caracteres o que os dados informados, o histórico
+climático, as referências da Embrapa e as condições do ZARC indicam em conjunto,
+somente quando cada fonte estiver presente. Aponte a principal limitação para o
+objetivo do agricultor. Depois, proponha até três ações, cada uma com uma frase
+de até 220 caracteres. Priorize o próximo passo, o objetivo e as restrições.
+Evite repetir dados, listar métricas,
 jargões, saudações e introduções. Não use Markdown ou listas dentro das strings.
 Se faltar escolher a cultura ou confirmar o solo no ZARC, destaque isso no resumo.
 Evite as palavras "inconclusivo" e "indisponível" na orientação ao agricultor.
