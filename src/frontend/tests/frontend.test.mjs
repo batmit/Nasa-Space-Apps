@@ -326,6 +326,12 @@ test("Gemini aparece como interpretação, preserva evidências e limpa dados an
   assert.equal(nodes.get("diagText").hidden, true);
   assert.equal(nodes.get("diagTitle").textContent, "Resumo da sua área");
   assert.equal(nodes.get("aiSummary").textContent, "<img src=x onerror=alert(1)>");
+  const analyses = nodes.get("aiPersonalizacao").children;
+  assert.equal(analyses.length, 2);
+  assert.equal(analyses[0].children[0].textContent, "pH informado: 4.2");
+  assert.match(analyses[0].children[1].textContent, /4,2/);
+  assert.equal(analyses[1].children[1].textContent, "<b>Sem água para irrigar</b>");
+  assert.match(analyses[1].children[3].textContent, /sequeiro/);
   const action = nodes.get("aiActions").children[0];
   assert.equal(action.tag, "p");
   assert.equal(action.textContent, "Confirme a classe AD.");
@@ -334,6 +340,7 @@ test("Gemini aparece como interpretação, preserva evidências e limpa dados an
   assert.equal(nodes.get("aiGuidance").hidden, true);
   assert.equal(nodes.get("aiSummary").textContent, "");
   assert.equal(nodes.get("aiActions").children.length, 0);
+  assert.equal(nodes.get("aiPersonalizacao").children.length, 0);
   assert.equal(nodes.get("fallbackGuidance").hidden, false);
   assert.equal(nodes.get("diagText").hidden, false);
   renderGemini({ status_ia: "nao_configurado" });

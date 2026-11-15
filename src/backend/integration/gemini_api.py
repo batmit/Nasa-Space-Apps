@@ -48,7 +48,7 @@ Não apresente a interpretação gerada como validação técnica da propriedade
 
 
 class GeminiClient:
-    def __init__(self, client, model: str = "gemini-3.1-flash-lite"):
+    def __init__(self, client, model: str = "gemini-4-hydrogen"):
         self._client = client
         self._model = model
 
@@ -58,6 +58,9 @@ class GeminiClient:
                 model=self._model,
                 system_instruction=SYSTEM_PROMPT,
                 input="Analise o cenário agrícola neste JSON:\n" + json.dumps(contexto, ensure_ascii=False, allow_nan=False),
+                generation_config={
+                    "thinking_level": "low",
+                },
                 response_format={
                     "type": "text", "mime_type": "application/json",
                     "schema": StructuredGeminiOutput.model_json_schema(),
@@ -65,6 +68,7 @@ class GeminiClient:
                 store=False,
                 timeout=30.0,
             )
+
             resultado = StructuredGeminiOutput.model_validate_json(interaction.output_text)
             permitidas = set(contexto["evidencias_contexto"])
             dados = contexto["dados_informados"]
@@ -82,7 +86,9 @@ class GeminiClient:
                 raise ValueError("Foram inventadas restrições")
             if any(id_ not in permitidas for item in analises for id_ in item.evidencias):
                 raise ValueError("Evidência desconhecida")
+
             return resultado
+
         except Exception as exc:
             # Erros do SDK e validação não expõem prompts, chaves ou dados ao cliente.
             raise OrientacaoIAError("Orientação personalizada indisponível.") from exc

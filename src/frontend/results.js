@@ -107,6 +107,8 @@ export function renderGemini(data) {
   const actions = document.getElementById("aiActions");
   summary.textContent = "";
   actions.replaceChildren();
+  const personalizacao = document.getElementById("aiPersonalizacao");
+  personalizacao.replaceChildren();
   const output = data.explicacao_ia;
   const available = data.status_ia === "disponivel" && typeof output?.resumo === "string"
     && Array.isArray(output.actions);
