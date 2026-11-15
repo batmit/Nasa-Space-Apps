@@ -169,10 +169,13 @@ test("resumo NASA exibe unidades corretas e limpa métricas quando indisponível
   context.after(() => { delete globalThis.document; });
   renderClimate({
     data_inicio: "2023-01-01", data_fim: "2025-12-31", precipitacao_media_anual_mm: 1000,
+    precipitacao_ultimos_12_meses_mm: 980,
     temperatura_media_c: 20, umidade_relativa_ar_pct: 70, radiacao_media_mj_m2_dia: 14.4,
     maior_sequencia_dias_sem_chuva: 20, meses: [{ mes: 1, precipitacao_media_mm: 100, temperatura_media_c: 20, anos_chuva_completos: 3 }],
   }, true);
   assert.equal(nodes.get("nasaStatus").textContent, "");
+  assert.equal(nodes.get("climateMetrics").children[0].children[0].textContent, "Chuva nos últimos 12 meses");
+  assert.equal(nodes.get("climateMetrics").children[0].children[1].textContent, "980 mm");
   assert.equal(nodes.get("climateMetrics").children[2].children[0].textContent, "Umidade relativa do ar a 2 m");
   assert.match(nodes.get("climateMetrics").children[3].children[1].textContent, /MJ\/m²\/dia/);
   assert.equal(nodes.get("climateChart").children[0].tag, "figure");
@@ -181,11 +184,17 @@ test("resumo NASA exibe unidades corretas e limpa métricas quando indisponível
   assert.match(nodes.get("climateChart").children[0].children[2].children[0].children[0].attributes["aria-label"], /Jan: chuva 100 mm; temperatura 20 °C/);
   renderClimate({
     data_inicio: "2025-05-01", data_fim: "2026-10-31", anos_chuva_completos: 0,
-    precipitacao_media_anual_mm: null, temperatura_media_c: 20,
+    precipitacao_media_anual_mm: null, precipitacao_ultimos_12_meses_mm: 310, temperatura_media_c: 20,
     umidade_relativa_ar_pct: 70, radiacao_media_mj_m2_dia: 14.4,
     maior_sequencia_dias_sem_chuva: 20, meses: [],
   }, true);
-  assert.equal(nodes.get("climateMetrics").children[0].children[1].textContent, "Sem ano civil completo no período");
+  assert.equal(nodes.get("climateMetrics").children[0].children[1].textContent, "310 mm");
+  renderClimate({
+    data_inicio: "2025-05-01", data_fim: "2026-10-31",
+    precipitacao_ultimos_12_meses_mm: 310, precipitacao_ultimos_12_meses_estimada: true,
+    meses: [],
+  }, true);
+  assert.equal(nodes.get("climateMetrics").children[0].children[0].textContent, "Chuva estimada nos últimos 12 meses");
   renderClimate(null, false);
   assert.equal(nodes.get("climateMetrics").children.length, 0);
   assert.equal(nodes.get("climateChart").children.length, 0);

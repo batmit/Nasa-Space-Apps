@@ -21,6 +21,8 @@ class ResumoClimatico(BaseModel):
     data_fim: date
     dias_esperados: int
     cobertura_pct: dict[str, float]
+    precipitacao_ultimos_12_meses_mm: float | None = None
+    precipitacao_ultimos_12_meses_estimada: bool = False
     precipitacao_media_anual_mm: float | None = None
     anos_chuva_completos: int = 0
     temperatura_media_c: float | None = None

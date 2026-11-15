@@ -55,6 +55,7 @@ def test_resumo_soma_chuva_por_ano_e_converte_radiacao(payload):
     result = resumir_clima(payload, INICIO, FIM)
     assert result.dias_esperados == 1096  # Inclui o ano bissexto.
     assert result.precipitacao_media_anual_mm == 310.0
+    assert result.precipitacao_ultimos_12_meses_mm == 310.0
     assert result.anos_chuva_completos == 3
     assert result.meses[0].precipitacao_media_mm == 310.0
     assert result.meses[0].anos_chuva_completos == 3
@@ -129,8 +130,31 @@ def test_dezoito_meses_nao_transformam_chuva_parcial_em_media_anual():
     resumo = resumir_clima(payload_periodo(inicio, fim), inicio, fim)
     assert resumo.anos_chuva_completos == 0
     assert resumo.precipitacao_media_anual_mm is None
+    assert resumo.precipitacao_ultimos_12_meses_mm == 310
     assert any("média anual não foi calculada" in aviso for aviso in resumo.avisos)
     assert any("menos de duas observações" in aviso for aviso in resumo.avisos)
+
+
+def test_chuva_12_meses_estima_lacuna_pequena_e_sinaliza_resultado():
+    inicio, fim = date(2025, 5, 1), date(2026, 10, 31)
+    dados = payload_periodo(inicio, fim)
+    dados["properties"]["parameter"]["PRECTOTCORR"]["20260101"] = -999
+    resumo = resumir_clima(dados, inicio, fim)
+    assert resumo.cobertura_pct["PRECTOTCORR"] > 90
+    assert resumo.precipitacao_ultimos_12_meses_mm == 310
+    assert resumo.precipitacao_ultimos_12_meses_estimada
+    assert any("estimada" in aviso for aviso in resumo.avisos)
+
+
+def test_chuva_12_meses_nao_estima_mes_com_cobertura_insuficiente():
+    inicio, fim = date(2025, 5, 1), date(2026, 10, 31)
+    dados = payload_periodo(inicio, fim)
+    for dia in range(1, 5):
+        dados["properties"]["parameter"]["PRECTOTCORR"][f"202601{dia:02d}"] = -999
+    resumo = resumir_clima(dados, inicio, fim)
+    assert resumo.precipitacao_ultimos_12_meses_mm is None
+    assert not resumo.precipitacao_ultimos_12_meses_estimada
+    assert any("menos de 90%" in aviso for aviso in resumo.avisos)
 
 
 def test_dezoito_meses_preservam_total_do_ano_civil_completo_quando_existente():
@@ -165,6 +189,7 @@ def test_http_gera_orientacoes_com_nasa_e_avisa_ausencia_de_zoneamento(payload):
     data = response.json()
     assert data["analise_climatica_realizada"]
     assert data["resumo_climatico"]["precipitacao_media_anual_mm"] == 310
+    assert data["resumo_climatico"]["precipitacao_ultimos_12_meses_mm"] == 310
     assert {"conservacao_agua", "planejamento_climatico", "cobertura_solo"} <= {o["tema"] for o in data["orientacoes"]}
     assert data["orientacoes"][0]["evidencias"]
     assert data["janelas"] == []

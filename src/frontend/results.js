@@ -214,8 +214,9 @@ export function renderClimate(climate, available) {
   const format = (value, unit) => typeof value === "number" && Number.isFinite(value)
     ? `${value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} ${unit}` : "Dados insuficientes";
   for (const [label, value] of [
-    ["Chuva média anual (anos completos)", climate.anos_chuva_completos === 0
-      ? "Sem ano civil completo no período" : format(climate.precipitacao_media_anual_mm, "mm/ano")],
+    [climate.precipitacao_ultimos_12_meses_estimada
+      ? "Chuva estimada nos últimos 12 meses" : "Chuva nos últimos 12 meses",
+    format(climate.precipitacao_ultimos_12_meses_mm, "mm")],
     ["Temperatura média", format(climate.temperatura_media_c, "°C")],
     ["Umidade relativa do ar a 2 m", format(climate.umidade_relativa_ar_pct, "%")],
     ["Radiação solar média", format(climate.radiacao_media_mj_m2_dia, "MJ/m²/dia")],

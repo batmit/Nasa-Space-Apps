@@ -207,11 +207,16 @@ não têm expiração automática; `force_refresh=True` permite atualizar a cole
 `analise_climatica_realizada` é `true` somente quando o resumo foi calculado
 com unidades reconhecidas e pelo menos 90% dos dias válidos em chuva e
 temperatura média. `resumo_climatico` inclui período, cobertura por parâmetro,
-médias mensais, chuva média anual, temperaturas, radiação e sequência máxima
+médias mensais, chuva acumulada nos últimos 12 meses completos, chuva média
+por ano civil quando disponível, temperaturas, radiação e sequência máxima
 de dias com precipitação inferior a 1 mm/dia. Valores ausentes não viram zero.
 Totais de chuva exigem meses/anos completos; um total incompleto é omitido.
 Uma janela de 18 meses pode não conter um ano civil completo; nesse caso, a
-chuva média anual fica ausente e um aviso explica a limitação. A quantidade de
+chuva média por ano civil fica ausente e um aviso explica a limitação. O total
+móvel de 12 meses continua disponível quando todos os dias desse intervalo
+têm chuva válida. Se um mês tiver ao menos 90% dos dias válidos, os dias
+ausentes são estimados pela média diária desse mês e o valor é identificado
+como estimativa; abaixo disso o total é omitido. A quantidade de
 observações completas de cada mês permanece explícita em `anos_chuva_completos`.
 Radiação é normalizada para **MJ/m²/dia** e a umidade é **relativa do ar a 2 m**,
 não umidade das raízes. Lacunas e limitações são apresentadas na resposta.
