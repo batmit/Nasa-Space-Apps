@@ -283,7 +283,7 @@ O `package.json` fica em `src/frontend`; `npm test` na raiz não é configurado.
 ### Orientação personalizada com Gemini (opcional)
 
 Instale `requirements.txt` e configure `GEMINI_API_KEY` no ambiente do servidor.
-O código não carrega arquivos `.env` automaticamente. Nunca coloque a chave no
+O backend carrega o `.env` da raiz automaticamente, preservando as variáveis já definidas no ambiente. Nunca coloque a chave no
 frontend ou no Git. `GEMINI_MODEL` permite substituir o modelo padrão
 `gemini-3.1-flash-lite`. Reinicie o servidor ao alterar essas variáveis.
 

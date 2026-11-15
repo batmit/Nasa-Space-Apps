@@ -31,7 +31,7 @@ def obter_orientador_ia():
         api_key=os.environ["GEMINI_API_KEY"],
         http_options={"timeout": 30000},
     )
-    return GeminiClient(client, model=os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"))
+    return GeminiClient(client, model=os.getenv("GEMINI_MODEL", "gemini-4-hydrogen"))
 
 
 @lru_cache(maxsize=1)

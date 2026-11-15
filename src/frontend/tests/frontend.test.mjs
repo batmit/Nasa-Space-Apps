@@ -276,7 +276,10 @@ test("Gemini aparece como interpretação, preserva evidências e limpa dados an
   };
   context.after(() => { delete globalThis.document; });
   renderGemini({ status_ia: "disponivel", explicacao_ia: {
-    resumo: "<img src=x onerror=alert(1)>", actions: [{ description: "Confirme a classe AD.",
+    resumo: "<img src=x onerror=alert(1)>",
+    analise_ph: { valor_informado: 4.2, interpretacao: "pH informado 4,2; método ausente.", orientacao: "Confirme a medição para a cultura." },
+    analise_restricoes: { texto_informado: "<b>Sem água para irrigar</b>", impacto: "Irrigação depende de água não disponível.", orientacao: "Avalie opções de sequeiro compatíveis com as chuvas." },
+    actions: [{ description: "Confirme a classe AD.",
       evidencias: ["usuario", "zarc:condicional:0"] }],
   } });
   assert.equal(nodes.get("aiGuidance").hidden, false);
@@ -284,6 +287,12 @@ test("Gemini aparece como interpretação, preserva evidências e limpa dados an
   assert.equal(nodes.get("diagText").hidden, true);
   assert.equal(nodes.get("diagTitle").textContent, "Sua orientação personalizada");
   assert.equal(nodes.get("aiSummary").textContent, "<img src=x onerror=alert(1)>");
+  const analyses = nodes.get("aiPersonalizacao").children;
+  assert.equal(analyses.length, 2);
+  assert.equal(analyses[0].children[0].textContent, "pH informado: 4.2");
+  assert.match(analyses[0].children[1].textContent, /4,2/);
+  assert.equal(analyses[1].children[1].textContent, "<b>Sem água para irrigar</b>");
+  assert.match(analyses[1].children[3].textContent, /sequeiro/);
   const action = nodes.get("aiActions").children[0];
   assert.equal(action.children[0].textContent, "Confirme a classe AD.");
   assert.match(action.children[1].children[1].textContent, /condicional/);
@@ -292,6 +301,7 @@ test("Gemini aparece como interpretação, preserva evidências e limpa dados an
   assert.equal(nodes.get("aiUnavailable").hidden, false);
   assert.equal(nodes.get("aiSummary").textContent, "");
   assert.equal(nodes.get("aiActions").children.length, 0);
+  assert.equal(nodes.get("aiPersonalizacao").children.length, 0);
   assert.equal(nodes.get("fallbackGuidance").hidden, false);
   assert.equal(nodes.get("diagText").hidden, false);
   renderGemini({ status_ia: "nao_configurado" });
