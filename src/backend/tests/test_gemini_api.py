@@ -9,9 +9,9 @@ from pydantic import ValidationError
 
 from src.backend.integration.gemini_api import GeminiClient
 from src.backend.models.gemini import OrientacaoIAError, StructuredGeminiOutput
-from src.backend.models.clima import ResumoClimatico
+from src.backend.models.clima import PrevisaoChuva, ProjecaoChuva, MesProjetado, ResumoClimatico
 from src.backend.models.recomendacao import (
-    DadosAgricultor, Municipio, RecomendacaoResponse, ReferenciaTecnica,
+    DadosAgricultor, EstimativaEstabelecimento, Municipio, RecomendacaoResponse, ReferenciaTecnica,
 )
 from src.backend.services.recomendacao import RecomendacaoService, montar_contexto_ia
 from src.backend.modules.routes import obter_orientador_ia, recomendar
@@ -32,6 +32,12 @@ def saida_personalizada():
             "impacto": "A opção de cenoura depende de equipamento que o agricultor não possui.",
             "orientacao": "Planeje somente opções compatíveis com o equipamento disponível.",
             "evidencias": ["usuario:restricoes"],
+        },
+        "sugestao_rotacao": {
+            "orientacao": "Planeje cobertura e sucessão conforme a avaliação local.",
+            "probabilidade_estabelecimento_pct": None,
+            "justificativa": "Ainda não há modelo calibrado para estabelecimento.",
+            "evidencias": ["usuario"],
         },
     }
 
@@ -73,6 +79,78 @@ def test_contexto_preserva_todos_campos_e_fontes_sem_alterar_resposta(resposta, 
     assert "embrapa:referencia:0" in contexto["evidencias_contexto"]
     assert "explicacao_ia" not in contexto
     assert resposta.model_dump_json() == antes
+
+
+def test_previsao_futura_entra_no_contexto_sem_se_confundir_com_historico(resposta):
+    resposta.previsao_chuva = PrevisaoChuva(
+        fonte="Modelo de chuva", data_inicio=date(2026, 12, 1), data_fim=date(2027, 1, 31),
+        resumo="Chuva prevista para o próximo bimestre.", precipitacao_prevista_mm=180,
+    )
+    contexto = montar_contexto_ia(resposta)
+    assert contexto["previsao_chuva"]["precipitacao_prevista_mm"] == 180
+    assert contexto["resumo_climatico"]["fonte"] == "NASA POWER"
+    assert contexto["evidencias_contexto"]["previsao:chuva"] == "/previsao_chuva"
+
+
+def test_percentual_exige_previsao_ou_fonte_calibrada(resposta):
+    output = saida_personalizada()
+    output["sugestao_rotacao"]["probabilidade_estabelecimento_pct"] = 75
+    output["sugestao_rotacao"]["evidencias"] = ["usuario", "modelo:estabelecimento"]
+    client = Mock()
+    client.interactions.create.return_value = SimpleNamespace(output_text=json.dumps(output))
+    with pytest.raises(OrientacaoIAError):
+        GeminiClient(client).gerar(montar_contexto_ia(resposta))
+    resposta.previsao_chuva = PrevisaoChuva(
+        fonte="Modelo de chuva", data_inicio=date(2026, 12, 1), data_fim=date(2027, 1, 31),
+        resumo="Chuva futura no bimestre.", precipitacao_prevista_mm=180,
+    )
+    with pytest.raises(OrientacaoIAError):
+        GeminiClient(client).gerar(montar_contexto_ia(resposta))
+    resposta.estimativa_estabelecimento = EstimativaEstabelecimento(
+        probabilidade_pct=75, metodo="Modelo calibrado", validacao="Validação local documentada",
+    )
+    assert GeminiClient(client).gerar(montar_contexto_ia(resposta)).sugestao_rotacao.probabilidade_estabelecimento_pct == 75
+    resposta.dados_informados.modo_demonstracao = True
+    assert GeminiClient(client).gerar(montar_contexto_ia(resposta)).sugestao_rotacao.probabilidade_estabelecimento_pct == 75
+
+
+def test_gemini_aceita_estimativa_exploratoria_com_projecao_da_nasa(resposta):
+    resposta.resumo_climatico.projecao_chuva = ProjecaoChuva(
+        meses=[MesProjetado(ano=2026, mes=12, precipitacao_estimada_mm=90, meses_historicos_utilizados=1)],
+        total_estimado_mm=None,
+    )
+    output = saida_personalizada()
+    output["sugestao_rotacao"].update(
+        probabilidade_estabelecimento_pct=68,
+        justificativa="Estimativa exploratória com a chuva projetada; depende do solo e manejo.",
+        evidencias=["usuario", "previsao:chuva"],
+    )
+    client = Mock()
+    client.interactions.create.return_value = SimpleNamespace(output_text=json.dumps(output))
+    contexto = montar_contexto_ia(resposta)
+    assert contexto["evidencias_contexto"]["previsao:chuva"] == "/resumo_climatico/projecao_chuva"
+    assert GeminiClient(client).gerar(contexto).sugestao_rotacao.probabilidade_estabelecimento_pct == 68
+    output["sugestao_rotacao"]["evidencias"] = ["usuario"]
+    client.interactions.create.return_value.output_text = json.dumps(output)
+    assert GeminiClient(client).gerar(contexto).sugestao_rotacao.probabilidade_estabelecimento_pct == 68
+
+
+def test_gemini_nao_aceita_resposta_sem_sugestao_de_rotacao(resposta):
+    output = saida_personalizada()
+    del output["sugestao_rotacao"]
+    client = Mock()
+    client.interactions.create.return_value = SimpleNamespace(output_text=json.dumps(output))
+    with pytest.raises(OrientacaoIAError):
+        GeminiClient(client).gerar(montar_contexto_ia(resposta))
+
+
+def test_rejeita_porcentagem_escondida_no_texto_da_rotacao(resposta):
+    output = saida_personalizada()
+    output["sugestao_rotacao"]["justificativa"] = "Chance de 75% de estabelecimento."
+    client = Mock()
+    client.interactions.create.return_value = SimpleNamespace(output_text=json.dumps(output))
+    with pytest.raises(OrientacaoIAError):
+        GeminiClient(client).gerar(montar_contexto_ia(resposta))
 
 
 def test_adapter_envia_json_schema_e_retorna_saida_validada(resposta):
@@ -134,6 +212,23 @@ def test_fluxo_coleta_fontes_antes_da_ia_e_preserva_fallback(dados, resposta, fa
     assert resultado["status_ia"] == ("indisponivel" if falha else "disponivel")
     assert resultado["resumo_climatico"] is not None
     assert (resultado["explicacao_ia"] is None) == falha
+
+
+def test_fluxo_injeta_previsao_no_mesmo_contexto_gemini(dados, resposta):
+    localizador, previsao, ia = Mock(), Mock(), Mock()
+    localizador.resolver_municipio.return_value = resposta.municipio
+    previsao.obter_previsao.return_value = PrevisaoChuva(
+        fonte="Modelo de chuva", data_inicio=date(2026, 12, 1), data_fim=date(2027, 1, 31),
+        resumo="Chuva futura no bimestre.", precipitacao_prevista_mm=180,
+    )
+    ia.gerar.return_value = StructuredGeminiOutput(**saida_personalizada())
+    servico = RecomendacaoService(None, None, localizador, orientacao_ia=ia, previsao_chuva=previsao)
+    resultado = servico.recomendar(dados)
+    previsao.obter_previsao.assert_called_once_with(dados.latitude, dados.longitude)
+    contexto = ia.gerar.call_args.args[0]
+    assert contexto["previsao_chuva"]["fonte"] == "Modelo de chuva"
+    assert contexto["evidencias_contexto"]["previsao:chuva"] == "/previsao_chuva"
+    assert resultado.previsao_chuva is not None
 
 
 def test_sem_chave_nao_inicializa_sdk():

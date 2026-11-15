@@ -9,7 +9,7 @@ from ..models.recomendacao import (
 )
 
 from ..models.gemini import OrientacaoIAError, StructuredGeminiOutput
-from ..models.clima import ClimaError, ResumoClimatico
+from ..models.clima import ClimaError, PrevisaoChuva, PrevisaoChuvaError, ResumoClimatico
 from .manejo import gerar_orientacoes
 from .zoneamento import FonteZoneamento, adicionar_zoneamento
 
@@ -29,6 +29,12 @@ def montar_contexto_ia(resposta: RecomendacaoResponse) -> dict:
         evidencias["usuario:restricoes"] = "/dados_informados/restricoes"
     if resposta.resumo_climatico is not None:
         evidencias["nasa:resumo"] = "/resumo_climatico"
+        if resposta.resumo_climatico.projecao_chuva is not None:
+            evidencias["previsao:chuva"] = "/resumo_climatico/projecao_chuva"
+    if resposta.previsao_chuva is not None:
+        evidencias["previsao:chuva"] = "/previsao_chuva"
+    if resposta.estimativa_estabelecimento is not None:
+        evidencias["modelo:estabelecimento"] = "/estimativa_estabelecimento"
     for i in range(len(resposta.janelas)):
         evidencias[f"zarc:janela:{i}"] = f"/janelas/{i}"
     for i in range(len(resposta.janelas_condicionais)):
@@ -41,6 +47,10 @@ def montar_contexto_ia(resposta: RecomendacaoResponse) -> dict:
 
 class FonteClima(Protocol):
     def obter_resumo(self, latitude: float, longitude: float) -> ResumoClimatico: ...
+
+
+class FontePrevisaoChuva(Protocol):
+    def obter_previsao(self, latitude: float, longitude: float) -> PrevisaoChuva: ...
 
 
 class FonteReferencias(Protocol):
@@ -61,12 +71,14 @@ def _normalizar(texto: str) -> str:
 class RecomendacaoService:
     def __init__(self, zoneamento: FonteZoneamento | None, referencias: FonteReferencias | None,
                  localizador: LocalizadorMunicipio, clima: FonteClima | None = None,
-                 orientacao_ia: FonteOrientacaoIA | None = None):
+                 orientacao_ia: FonteOrientacaoIA | None = None,
+                 previsao_chuva: FontePrevisaoChuva | None = None):
         self._zoneamento = zoneamento
         self._referencias = referencias
         self._localizador = localizador
         self._clima = clima
         self._orientacao_ia = orientacao_ia
+        self._previsao_chuva = previsao_chuva
 
     def recomendar(self, dados: DadosAgricultor) -> RecomendacaoResponse:
         municipio = self._localizador.resolver_municipio(dados.latitude, dados.longitude)
@@ -80,6 +92,10 @@ class RecomendacaoService:
                 "O pH isolado não determina dose de calcário ou adubo; é necessária análise de solo completa e método de medição.",
             ],
         )
+        if dados.modo_demonstracao:
+            resposta.avisos.append(
+                "Cenário demonstrativo: dados de solo e manejo são teóricos e não representam medições da propriedade."
+            )
         regiao = dados.regiao_nome.rsplit(",", 1)
         nome_compativel = _normalizar(regiao[0]) == _normalizar(municipio.nome)
         uf_compativel = len(regiao) == 1 or _normalizar(regiao[1]) == _normalizar(municipio.uf)
@@ -100,6 +116,13 @@ class RecomendacaoService:
                 resposta.avisos.extend(resposta.resumo_climatico.avisos)
         else:
             resposta.avisos.append("Fonte climática não configurada para esta consulta.")
+        if self._previsao_chuva is not None:
+            try:
+                resposta.previsao_chuva = self._previsao_chuva.obter_previsao(dados.latitude, dados.longitude)
+            except PrevisaoChuvaError:
+                resposta.avisos.append("Não foi possível obter a previsão de chuva para esta consulta.")
+            else:
+                resposta.fontes.append(resposta.previsao_chuva.fonte)
         adicionar_zoneamento(dados, resposta, self._zoneamento)
         if not resposta.janelas:
             resposta.pendencias.append("A época de plantio da cultura desejada não foi validada nesta consulta.")

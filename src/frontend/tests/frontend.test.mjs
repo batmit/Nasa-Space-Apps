@@ -21,6 +21,11 @@ test("payload contém os dez campos, números e restrições normalizadas", () =
   assert.equal(buildPayload(form({ ...input, latitude: "0", longitude: "0" })).latitude, 0);
 });
 
+test("cenário teórico envia a marca de demonstração sem mudar o contrato manual", () => {
+  assert.equal(buildPayload(form({ ...input, modo_demonstracao: "true" })).modo_demonstracao, true);
+  assert.equal("modo_demonstracao" in buildPayload(form(input)), false);
+});
+
 test("coordenadas ausentes, inválidas e restrições longas não são enviadas", () => {
   for (const values of [{ latitude: "" }, { latitude: "100" }, { longitude: "NaN" }, { ph: "" }, { restricoes: "x".repeat(2001) }]) {
     assert.throws(() => buildPayload(form({ ...input, ...values })));
@@ -169,27 +174,45 @@ test("resumo NASA exibe unidades corretas e limpa métricas quando indisponível
   context.after(() => { delete globalThis.document; });
   renderClimate({
     data_inicio: "2023-01-01", data_fim: "2025-12-31", precipitacao_media_anual_mm: 1000,
+    precipitacao_ultimos_12_meses_mm: 980,
     temperatura_media_c: 20, umidade_relativa_ar_pct: 70, radiacao_media_mj_m2_dia: 14.4,
     maior_sequencia_dias_sem_chuva: 20, meses: [{ mes: 1, precipitacao_media_mm: 100, temperatura_media_c: 20, anos_chuva_completos: 3 }],
+    projecao_chuva: { total_estimado_mm: 250, aviso: "Projeção exploratória.", meses: [
+      { ano: 2026, mes: 12, precipitacao_estimada_mm: 90, meses_historicos_utilizados: 1 },
+      { ano: 2027, mes: 1, precipitacao_estimada_mm: 160, meses_historicos_utilizados: 1 },
+    ] },
   }, true);
   assert.equal(nodes.get("nasaStatus").textContent, "");
+  assert.equal(nodes.get("climateMetrics").children[0].children[0].textContent, "Chuva nos últimos 12 meses");
+  assert.equal(nodes.get("climateMetrics").children[0].children[1].textContent, "980 mm");
   assert.equal(nodes.get("climateMetrics").children[2].children[0].textContent, "Umidade relativa do ar a 2 m");
   assert.match(nodes.get("climateMetrics").children[3].children[1].textContent, /MJ\/m²\/dia/);
   assert.equal(nodes.get("climateChart").children[0].tag, "figure");
   const bar = nodes.get("climateChart").children[0].children[2].children[0].children[0].children[1].children[0];
   assert.equal(bar.style.height, "100%");
   assert.match(nodes.get("climateChart").children[0].children[2].children[0].children[0].attributes["aria-label"], /Jan: chuva 100 mm; temperatura 20 °C/);
+  assert.equal(nodes.get("forecastPanel").hidden, false);
+  assert.match(nodes.get("forecastTotal").textContent, /250 mm/);
+  assert.equal(nodes.get("forecastMonths").children.length, 2);
   renderClimate({
     data_inicio: "2025-05-01", data_fim: "2026-10-31", anos_chuva_completos: 0,
-    precipitacao_media_anual_mm: null, temperatura_media_c: 20,
+    precipitacao_media_anual_mm: null, precipitacao_ultimos_12_meses_mm: 310, temperatura_media_c: 20,
     umidade_relativa_ar_pct: 70, radiacao_media_mj_m2_dia: 14.4,
     maior_sequencia_dias_sem_chuva: 20, meses: [],
   }, true);
-  assert.equal(nodes.get("climateMetrics").children[0].children[1].textContent, "Sem ano civil completo no período");
+  assert.equal(nodes.get("climateMetrics").children[0].children[1].textContent, "310 mm");
+  renderClimate({
+    data_inicio: "2025-05-01", data_fim: "2026-10-31",
+    precipitacao_ultimos_12_meses_mm: 310, precipitacao_ultimos_12_meses_estimada: true,
+    meses: [],
+  }, true);
+  assert.equal(nodes.get("climateMetrics").children[0].children[0].textContent, "Chuva estimada nos últimos 12 meses");
   renderClimate(null, false);
   assert.equal(nodes.get("climateMetrics").children.length, 0);
   assert.equal(nodes.get("climateChart").children.length, 0);
   assert.equal(nodes.get("climateMonthly").children.length, 0);
+  assert.equal(nodes.get("forecastPanel").hidden, true);
+  assert.equal(nodes.get("forecastMonths").children.length, 0);
   assert.match(nodes.get("nasaStatus").textContent, /Consulte novamente/);
 });
 
@@ -211,17 +234,20 @@ test("projeção exibe doze meses futuros, distingue lacunas de zero e limpa con
     })),
   } };
   renderClimate(climate, true);
-  const table = nodes.get("climateMonthly").children.at(-1);
+  assert.equal(nodes.get("forecastPanel").hidden, false);
+  const table = nodes.get("forecastTable").children[0];
   const rows = table.children[1].children;
   assert.equal(rows.length, 12);
   assert.equal(rows[0].children[0].textContent, "Dez/2026");
   assert.equal(rows[11].children[0].textContent, "Nov/2027");
   assert.equal(rows[0].children[1].textContent.trim(), "0");
   assert.equal(rows[1].children[1].textContent, "Dados insuficientes");
-  assert.equal(nodes.get("climateMetrics").children.at(-1).children[1].textContent, "Dados insuficientes");
+  assert.match(nodes.get("forecastTotal").textContent, /Dados insuficientes/);
   renderClimate({ meses: [] }, true);
   assert.equal(nodes.get("climateMonthly").children.length, 1);
   assert.equal(nodes.get("climateMetrics").children.length, 5);
+  assert.equal(nodes.get("forecastPanel").hidden, true);
+  assert.equal(nodes.get("forecastTable").children.length, 0);
 });
 
 test("janelas condicionais ficam separadas das confirmadas e são limpas ao repetir consulta", (context) => {
@@ -351,6 +377,8 @@ test("Gemini aparece como interpretação, preserva evidências e limpa dados an
       evidencias: ["usuario:ph", "usuario:restricoes", "zarc:condicional:0"] }],
     analise_ph: { valor_informado: 5.5, interpretacao: "pH ácido", orientacao: "Avalie correção." },
     analise_restricoes: { texto_informado: "Pouca água", impacto: "Limita irrigação", orientacao: "Planeje a água." },
+    sugestao_rotacao: { orientacao: "Planeje cobertura e sucessão local.",
+      probabilidade_estabelecimento_pct: 68, justificativa: "Depende do manejo e do solo.", evidencias: ["usuario", "previsao:chuva"] },
   } });
   assert.equal(nodes.get("aiGuidance").hidden, false);
   assert.equal(nodes.get("fallbackGuidance").hidden, true);
@@ -361,10 +389,18 @@ test("Gemini aparece como interpretação, preserva evidências e limpa dados an
   assert.equal(action.tag, "p");
   assert.equal(action.textContent, "Confirme a classe AD.");
   assert.equal(action.className, "ai-action-paragraph");
+  assert.equal(nodes.get("rotationSuggestion").textContent, "Planeje cobertura e sucessão local.");
+  assert.equal(nodes.get("rotationEstimate").hidden, false);
+  assert.equal(nodes.get("rotationProbabilityValue").textContent, "68%");
+  assert.equal(nodes.get("rotationEstimateNote").textContent, "Estimativa exploratória pelo Gemini");
+  assert.equal(nodes.get("rotationProbability").textContent, "");
   renderGemini({ status_ia: "indisponivel", explicacao_ia: null });
   assert.equal(nodes.get("aiGuidance").hidden, true);
   assert.equal(nodes.get("aiSummary").textContent, "");
   assert.equal(nodes.get("aiActions").children.length, 0);
+  assert.match(nodes.get("rotationSuggestion").textContent, /não foi gerada nesta consulta/);
+  assert.equal(nodes.get("rotationEstimate").hidden, true);
+  assert.equal(nodes.get("rotationProbabilityValue").textContent, "");
   assert.equal(nodes.get("fallbackGuidance").hidden, false);
   assert.equal(nodes.get("diagText").hidden, false);
   renderGemini({ status_ia: "nao_configurado" });

@@ -82,7 +82,7 @@ class RecomendacaoTests(unittest.TestCase):
 
     def test_contrato_frontend_preserva_contexto_e_avisa_divergencia(self):
         payload = self.client.post("/api/v1/recomendar", json=ENTRADA).json()
-        self.assertEqual(payload["dados_informados"], dict(ENTRADA, id_cultura=None, tipo_solo_informado=None))
+        self.assertEqual(payload["dados_informados"], dict(ENTRADA, id_cultura=None, tipo_solo_informado=None, modo_demonstracao=False))
         self.assertEqual(payload["municipio"]["codigo_ibge"], 3502804)
         self.assertTrue(any("difere" in aviso for aviso in payload["avisos"]))
         self.assertIn("recuperar solo", self.referencias.buscar_referencias.call_args.args[0])
@@ -92,6 +92,11 @@ class RecomendacaoTests(unittest.TestCase):
         entrada = dict(ENTRADA, regiao_nome="Aracatuba, SP")
         payload = self.client.post("/api/v1/recomendar", json=entrada).json()
         self.assertFalse(any("difere" in aviso for aviso in payload["avisos"]))
+
+    def test_cenario_demonstrativo_e_identificado_na_resposta(self):
+        payload = self.client.post("/api/v1/recomendar", json=dict(ENTRADA, modo_demonstracao=True)).json()
+        self.assertTrue(payload["dados_informados"]["modo_demonstracao"])
+        self.assertTrue(any("Cenário demonstrativo" in aviso for aviso in payload["avisos"]))
 
     def test_cultura_ambigua_nao_escolhe_id_arbitrario(self):
         self.zoneamento.listar_culturas_municipio.return_value = [cultura(), cultura(id=2)]

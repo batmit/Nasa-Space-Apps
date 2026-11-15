@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
-from .clima import ResumoClimatico
+from .clima import PrevisaoChuva, ResumoClimatico
 from .gemini import StructuredGeminiOutput
 
 
@@ -47,6 +47,7 @@ class DadosAgricultor(BaseModel):
     historico_area: str = Field(min_length=1, max_length=200)
     objetivo: str = Field(min_length=1, max_length=200)
     restricoes: str = Field(default="", max_length=2000)
+    modo_demonstracao: bool = False
 
 
 class Municipio(BaseModel):
@@ -128,6 +129,14 @@ class Orientacao(BaseModel):
     url_fonte: str | None = None
 
 
+class EstimativaEstabelecimento(BaseModel):
+    """Probabilidade calibrada de estabelecimento, fornecida por modelo próprio."""
+    alvo: Literal["estabelecimento"] = "estabelecimento"
+    probabilidade_pct: float = Field(ge=0, le=100, allow_inf_nan=False)
+    metodo: str = Field(min_length=1, max_length=200)
+    validacao: str = Field(min_length=1, max_length=300)
+
+
 class RecomendacaoResponse(BaseModel):
     status: Literal["orientacao_condicional", "dados_insuficientes"]
     explicacao_ia: StructuredGeminiOutput | None = None
@@ -153,6 +162,8 @@ class RecomendacaoResponse(BaseModel):
     restricoes_avaliadas: bool = False
     analise_climatica_realizada: bool = False
     resumo_climatico: ResumoClimatico | None = None
+    previsao_chuva: PrevisaoChuva | None = None
+    estimativa_estabelecimento: EstimativaEstabelecimento | None = None
     fontes: list[str] = Field(default_factory=list)
 
     @computed_field

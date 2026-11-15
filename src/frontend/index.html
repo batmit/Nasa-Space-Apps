@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261115-resultados-8" />
+  <link rel="stylesheet" href="styles.css?v=20261115-resultados-2" />
 </head>
 <body class="bg-[#F6F8F5] text-slate-900 antialiased h-screen overflow-hidden flex flex-col">
 
@@ -159,6 +159,27 @@
 
           <div class="p-6 space-y-6">
 
+            <section class="sensor-demo" aria-labelledby="sensorDemoTitle">
+              <h3 id="sensorDemoTitle" class="text-sm font-extrabold text-slate-900">Como deseja continuar?</h3>
+              <div class="sensor-choice" role="group" aria-label="Forma de preenchimento">
+                <button type="button" id="btnManualSoil" class="sensor-choice-button is-selected" aria-pressed="true">Preencher manualmente</button>
+                <button type="button" id="btnSensorDemo" class="sensor-choice-button" aria-pressed="false">Ver sensor da área</button>
+              </div>
+              <div id="sensorDemoPanel" class="hidden sensor-demo-panel">
+                <p class="sensor-demo-label">Cenário teórico para fins de tese</p>
+                <div class="sensor-readings" aria-label="Valores teóricos do cenário">
+                  <p><strong>Cultura</strong><span>Milho</span></p>
+                  <p><strong>Solo</strong><span>Textura média</span></p>
+                  <p><strong>pH</strong><span>6,2</span></p>
+                  <p><strong>Umidade</strong><span>32%</span></p>
+                  <p><strong>Temperatura</strong><span>24 °C</span></p>
+                </div>
+                <p class="sensor-demo-help">Hipóteses de manejo: sequeiro, área antes em monocultura ou pousio, objetivo de recuperar o solo e nenhuma restrição informada.</p>
+                <p class="sensor-demo-help">Nenhum dispositivo está conectado. Os dados de solo e manejo são hipotéticos; umidade e temperatura não são enviadas. NASA e ZARC usam a localização escolhida.</p>
+              </div>
+            </section>
+
+            <div id="manualPersonalization" class="space-y-6">
             <!-- A. Cultura Principal Desejada (chave: cultura_desejada | valores snake_case limpos) -->
             <div>
               <label for="cropSelect" class="block text-sm font-extrabold text-slate-900 mb-1">
@@ -385,6 +406,7 @@
                 placeholder="Ex: Tenho pouca água disponível. Não consigo plantar cenoura ou batata porque não tenho maquinário nem comprador na região..."
                 class="w-full rounded-xl border-2 border-amber-300 bg-white px-4 py-3 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-700 focus:ring-4 focus:ring-emerald-600/15 transition"></textarea>
             </div>
+            </div>
 
             <p id="formFeedback" role="alert" class="hidden feedback-error"></p>
 
@@ -410,10 +432,10 @@
          ========================================== -->
     <section id="screen-3" class="wizard-screen screen-below" aria-label="Resultado da consulta">
       <div class="result-container w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-        <div id="loadingIndicator" class="hidden result-panel text-center" role="status" aria-live="polite">
+        <div id="loadingIndicator" class="hidden result-panel loading-panel" role="status" aria-live="polite">
           <div class="w-12 h-12 border-4 border-emerald-700 border-t-transparent rounded-full animate-spin mx-auto"></div>
           <h2 id="loadingTitle" class="font-extrabold text-lg mt-4">Buscando opções de cultura...</h2>
-          <p class="result-next-step">Aguarde alguns instantes.</p>
+          <p class="loading-help">Aguarde alguns instantes.</p>
         </div>
         <div id="requestError" class="hidden result-panel" role="alert">
           <h2 class="font-extrabold text-lg">Confira a consulta</h2>
@@ -425,7 +447,7 @@
           <p class="result-eyebrow">Antes dos resultados</p>
           <h2 id="cultureGateTitle" class="result-headline">Escolha a opção de cultura</h2>
           <p id="cultureGateRegion" class="result-location"></p>
-          <p class="result-next-step">Escolha a safra e o sistema de cultivo que correspondem à sua lavoura.</p>
+          <p id="cultureGateHelp" class="result-next-step">Escolha a safra e o sistema de cultivo que correspondem à sua lavoura.</p>
           <div id="cultureSelection" class="mt-4">
             <div id="cultureOptions" class="culture-choice-list"></div>
           </div>
@@ -433,6 +455,7 @@
           <button type="button" id="btnCultureEdit" class="result-text-button mt-5">Revisar cultura e irrigação</button>
         </div>
         <div id="backendResultsWrapper" class="hidden result-stack" aria-live="polite">
+          <p id="demoResultNotice" class="hidden sensor-result-notice" role="note">Cenário de tese: solo e manejo teóricos. Os dados NASA e ZARC usam a localização escolhida.</p>
           <section class="result-panel result-climate-panel" id="nasaPanel" aria-labelledby="climateTitle">
             <p class="result-eyebrow">1 · NASA POWER</p>
             <h3 id="climateTitle" class="result-section-title">Histórico do clima na região</h3>
@@ -443,9 +466,19 @@
               <div id="climateMonthly" class="mt-4 overflow-x-auto"></div>
             </details>
           </section>
+          <section id="forecastPanel" class="hidden result-panel" aria-labelledby="forecastTitle">
+            <p class="result-eyebrow">2 · Projeção sazonal</p>
+            <h3 id="forecastTitle" class="result-section-title">Previsão de chuva</h3>
+            <p id="forecastTotal" class="rotation-text"></p>
+            <div id="forecastMonths" class="forecast-months"></div>
+            <p id="forecastNote" class="rotation-probability"></p>
+            <details class="result-more mt-4"><summary>Ver os 12 meses projetados</summary>
+              <div id="forecastTable" class="mt-4 overflow-x-auto"></div>
+            </details>
+          </section>
           <div class="result-panel result-overview">
             <div class="result-toolbar">
-              <p class="result-eyebrow">2 · Análise da sua área</p>
+              <p class="result-eyebrow">3 · Análise da sua área</p>
               <button type="button" id="btnViewData" class="result-text-button">Ver dados usados ↓</button>
             </div>
             <h2 id="diagTitle" class="result-headline"></h2>
@@ -462,9 +495,20 @@
             </div>
             <div class="result-footer"><p class="result-caution">Confirme as condições do talhão antes de plantar.</p><button type="button" id="btnEditInputs" class="result-text-button">Revisar dados</button></div>
           </div>
+          <section class="result-panel result-rotation-panel" aria-labelledby="rotationTitle">
+            <p class="result-eyebrow">Planejamento da próxima safra</p>
+            <h3 id="rotationTitle" class="result-section-title">Sugestão de rotação</h3>
+            <p id="rotationSuggestion" class="rotation-text"></p>
+            <div id="rotationEstimate" class="hidden rotation-estimate">
+              <p id="rotationEstimateLabel" class="rotation-estimate-label"></p>
+              <strong id="rotationProbabilityValue" class="rotation-estimate-value"></strong>
+              <p id="rotationEstimateNote" class="rotation-estimate-note"></p>
+            </div>
+            <p id="rotationProbability" class="rotation-probability"></p>
+          </section>
           <div class="result-panel result-zarc-panel">
             <div class="result-toolbar result-zarc-heading">
-              <div><p class="result-eyebrow">3 · Embrapa · ZARC (zoneamento de risco climático)</p><h3 class="result-section-title">Quando plantar?</h3></div>
+              <div><p class="result-eyebrow">4 · Embrapa · ZARC (zoneamento de risco climático)</p><h3 class="result-section-title">Quando plantar?</h3></div>
               <span id="zarcCount" class="result-count"></span>
             </div>
             <p id="zarcStatus" class="result-status" role="status"></p>
@@ -507,6 +551,6 @@
 
   </form>
 
-  <script type="module" src="app.js?v=20261115-clima-18m-1"></script>
+  <script type="module" src="app.js?v=20261115-resultados-2"></script>
 </body>
 </html>

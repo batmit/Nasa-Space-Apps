@@ -67,6 +67,37 @@ test("navigation and controls preserve the farmer's selections", async ({ page }
   await expect(page.locator("#cropSelect")).toHaveValue("soja");
 });
 
+test("sensor demonstration hides manual choices and marks theoretical inputs", async ({ page }) => {
+  let catalogPayload;
+  let recommendationPayload;
+  await page.route(catalogEndpoint, (route) => {
+    catalogPayload = route.request().postDataJSON();
+    return route.fulfill({ json: { municipio: { nome: "Ouro Preto", uf: "MG" },
+      opcoes: [{ id: 12, nome: "MILHO SEQUEIRO", cultivo: "SEQUEIRO" }] } });
+  });
+  await page.route(endpoint, (route) => {
+    recommendationPayload = route.request().postDataJSON();
+    return route.fulfill({ json: result(recommendationPayload) });
+  });
+  await next(page);
+  await page.locator('[data-crop="soja"]').click();
+  await page.locator("#btnSensorDemo").click();
+  await expect(page.locator("#sensorDemoPanel")).toBeVisible();
+  await expect(page.locator("#sensorDemoPanel")).toContainText("Cenário teórico");
+  await expect(page.locator("#manualPersonalization")).toBeHidden();
+  await consult(page);
+  expect(catalogPayload).toMatchObject({ cultura_desejada: "milho", forma_irrigacao: "sem_irrigacao" });
+  expect(recommendationPayload).toMatchObject({ modo_demonstracao: true, cultura_desejada: "MILHO SEQUEIRO",
+    tipo_solo: "textura_media", ph: 6.2, historico_area: "monocultura_pousio",
+    objetivo: "recuperar_solo", restricoes: "" });
+  await expect(page.locator("#demoResultNotice")).toBeVisible();
+  await page.locator("#btnEditInputs").click();
+  await page.locator("#btnManualSoil").click();
+  await expect(page.locator("#sensorDemoPanel")).toBeHidden();
+  await expect(page.locator("#manualPersonalization")).toBeVisible();
+  await expect(page.locator("#cropSelect")).toHaveValue("soja");
+});
+
 test("location search waits for resolution and submits the selected coordinates", async ({ page }) => {
   let release;
   const waiting = new Promise((resolve) => { release = resolve; });
@@ -125,6 +156,11 @@ test("submission shows loading, prevents duplicate requests, and exports the res
   expect(requests).toBe(0);
   await page.locator("#cultureOptions button").first().click();
   await expect(page.locator("#loadingIndicator")).toBeVisible();
+  expect(await page.locator("#loadingIndicator").evaluate((node) => ({
+    textAlign: getComputedStyle(node).textAlign,
+    alignItems: getComputedStyle(node).alignItems,
+    justifyContent: getComputedStyle(node).justifyContent,
+  }))).toEqual({ textAlign: "center", alignItems: "center", justifyContent: "center" });
   await expect(page.locator("#screen-3")).toHaveAttribute("aria-busy", "true");
   await expect(page.locator("#btnSubmitToBackend")).toBeDisabled();
   // A second submit event must also be ignored, even if triggered programmatically.
@@ -235,7 +271,10 @@ test("results display planting windows and climate, escape external text, and cl
         maior_sequencia_dias_sem_chuva: 15, meses: [
           { mes: 1, precipitacao_media_mm: 120, temperatura_media_c: 23, anos_chuva_completos: 3 },
           { mes: 2, precipitacao_media_mm: 60, temperatura_media_c: 24, anos_chuva_completos: 3 },
-        ] },
+        ], projecao_chuva: { total_estimado_mm: 300, aviso: "Estimativa sazonal exploratória.", meses: [
+          { ano: 2026, mes: 12, precipitacao_estimada_mm: 90, meses_historicos_utilizados: 1 },
+          { ano: 2027, mes: 1, precipitacao_estimada_mm: 210, meses_historicos_utilizados: 1 },
+        ] } },
     } : {};
     return route.fulfill({ json: result(route.request().postDataJSON(), extra) });
   });
@@ -245,6 +284,9 @@ test("results display planting windows and climate, escape external text, and cl
   await expect(page.locator("#plantingWindows")).toContainText("01/11 – 30/11");
   await expect(page.locator("#climateMetrics")).toContainText("MJ/m²/dia");
   await expect(page.locator("#nasaPanel")).toBeVisible();
+  await expect(page.locator("#forecastPanel")).toBeVisible();
+  await expect(page.locator("#forecastTotal")).toContainText("300 mm");
+  await expect(page.locator("#forecastMonths")).toContainText("Dez/2026");
   await expect(page.locator("#climateChart .climate-bar")).toHaveCount(2);
   await expect(page.locator("#climateChart")).toContainText("120 mm");
   await expect(page.locator("#climateChart")).toContainText("23 °C");
@@ -258,6 +300,7 @@ test("results display planting windows and climate, escape external text, and cl
   await expect(page.locator("#climateMetrics")).toBeEmpty();
   await expect(page.locator("#climateChart")).toBeEmpty();
   await expect(page.locator("#climateMonthly")).toBeEmpty();
+  await expect(page.locator("#forecastPanel")).toBeHidden();
   await expect(page.locator("#plantingWindows article")).toHaveCount(0);
 });
 
@@ -267,7 +310,9 @@ test("Gemini interpretation is optional and a failure preserves source results",
     calls++;
     return route.fulfill({ json: result(route.request().postDataJSON(), calls === 1 ? {
       status_ia: "disponivel", explicacao_ia: { resumo: "Confira o solo antes de plantar.",
-        actions: [{ description: "Confirme a classe AD.", evidencias: ["usuario"] }] },
+        actions: [{ description: "Confirme a classe AD.", evidencias: ["usuario"] }],
+        sugestao_rotacao: { orientacao: "Planeje cobertura antes da próxima cultura.",
+          probabilidade_estabelecimento_pct: 68, justificativa: "Depende do manejo e do solo.", evidencias: ["usuario", "previsao:chuva"] } },
     } : { status_ia: "indisponivel", explicacao_ia: null }) });
   });
   await next(page);
@@ -276,10 +321,23 @@ test("Gemini interpretation is optional and a failure preserves source results",
   await expect(page.locator("#aiSummary")).toHaveText("Confira o solo antes de plantar.");
   await expect(page.locator("#fallbackGuidance")).toBeHidden();
   await expect(page.locator("#aiActions")).toContainText("Confirme a classe AD.");
+  await expect(page.locator("#rotationSuggestion")).toHaveText("Planeje cobertura antes da próxima cultura.");
+  await expect(page.locator("#rotationEstimate")).toBeVisible();
+  await expect(page.locator("#rotationProbabilityValue")).toHaveText("68%");
+  await expect(page.locator("#rotationEstimateNote")).toHaveText("Estimativa exploratória pelo Gemini");
+  await page.setViewportSize({ width: 375, height: 812 });
+  const estimateLayout = await page.locator("#rotationEstimate").evaluate((node) => ({
+    right: node.getBoundingClientRect().right,
+    fontSize: parseFloat(getComputedStyle(node.querySelector("#rotationProbabilityValue")).fontSize),
+  }));
+  expect(estimateLayout.right).toBeLessThanOrEqual(375);
+  expect(estimateLayout.fontSize).toBeGreaterThanOrEqual(44);
   await page.locator("#btnEditInputs").click();
   await consult(page);
   await expect(page.locator("#aiGuidance")).toBeHidden();
   await expect(page.locator("#aiSummary")).toBeEmpty();
+  await expect(page.locator("#rotationSuggestion")).toContainText("não foi gerada nesta consulta");
+  await expect(page.locator("#rotationEstimate")).toBeHidden();
   await expect(page.locator("#fallbackGuidance")).toBeVisible();
   await expect(page.locator("#pendingItems")).toContainText("Confirme a análise do solo.");
 });

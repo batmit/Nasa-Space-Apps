@@ -228,6 +228,24 @@ para distinguir ausência de dados de janelas descartadas pelos filtros.
 
 ## NASA e recomendações
 
+Na etapa 2, **Ver sensor da área** ativa um cenário teórico para demonstração
+acadêmica. Não há conexão com Arduino: cultura, solo, pH e manejo são hipóteses
+identificadas no formulário e no resultado. Umidade e temperatura ilustrativas
+não entram no contrato da API. O modo manual continua separado.
+
+A tela de resultados mostra o histórico NASA, uma projeção de chuva para os
+próximos 12 meses e uma sugestão breve de rotação. A projeção repete a média
+observada de cada mês do ano no histórico recente de 18 meses; ela não é um
+modelo meteorológico validado. O Gemini recebe a projeção na mesma chamada
+que recebe os dados do agricultor e as demais fontes. Pode gerar uma estimativa
+**exploratória** de 0 a 100% para o **estabelecimento das culturas** sugeridas,
+com justificativa curta. A interface identifica essa estimativa como exploratória.
+Se não houver projeção, não apresenta porcentagem. O serviço também aceita um
+adaptador opcional `previsao_chuva` que implemente `obter_previsao(latitude,
+longitude)` e devolva `PrevisaoChuva`, para uma fonte futura separada da NASA.
+Quando `estimativa_estabelecimento` trouxer probabilidade calibrada, o Gemini
+deve copiar exatamente esse valor e citar sua fonte.
+
 A consulta inicial do frontend continua com dez campos; a escolha de uma
 opção específica pode acrescentar `id_cultura`. O backend escolhe
 os 18 meses completos anteriores ao mês atual (em novembro de 2026:
@@ -240,11 +258,16 @@ não têm expiração automática; `force_refresh=True` permite atualizar a cole
 `analise_climatica_realizada` é `true` somente quando o resumo foi calculado
 com unidades reconhecidas e pelo menos 90% dos dias válidos em chuva e
 temperatura média. `resumo_climatico` inclui período, cobertura por parâmetro,
-médias mensais, chuva média anual, temperaturas, radiação e sequência máxima
+médias mensais, chuva acumulada nos últimos 12 meses completos, chuva média
+por ano civil quando disponível, temperaturas, radiação e sequência máxima
 de dias com precipitação inferior a 1 mm/dia. Valores ausentes não viram zero.
 Totais de chuva exigem meses/anos completos; um total incompleto é omitido.
 Uma janela de 18 meses pode não conter um ano civil completo; nesse caso, a
-chuva média anual fica ausente e um aviso explica a limitação. A quantidade de
+chuva média por ano civil fica ausente e um aviso explica a limitação. O total
+móvel de 12 meses continua disponível quando todos os dias desse intervalo
+têm chuva válida. Se um mês tiver ao menos 90% dos dias válidos, os dias
+ausentes são estimados pela média diária desse mês e o valor é identificado
+como estimativa; abaixo disso o total é omitido. A quantidade de
 observações completas de cada mês permanece explícita em `anos_chuva_completos`.
 Radiação é normalizada para **MJ/m²/dia** e a umidade é **relativa do ar a 2 m**,
 não umidade das raízes. Lacunas e limitações são apresentadas na resposta.

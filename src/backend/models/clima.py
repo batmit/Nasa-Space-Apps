@@ -27,8 +27,8 @@ class ProjecaoChuva(BaseModel):
     meses: list[MesProjetado]
     total_estimado_mm: float | None = None
     aviso: str = (
-        "Estimativa sazonal baseada nos últimos 18 meses, assumindo repetição do padrão de chuva. "
-        "Não é uma previsão meteorológica validada."
+        "Projeção sazonal baseada nos últimos 18 meses. "
+        "É uma hipótese de repetição do padrão recente, não uma previsão meteorológica validada."
     )
 
 
@@ -38,6 +38,8 @@ class ResumoClimatico(BaseModel):
     data_fim: date
     dias_esperados: int
     cobertura_pct: dict[str, float]
+    precipitacao_ultimos_12_meses_mm: float | None = None
+    precipitacao_ultimos_12_meses_estimada: bool = False
     precipitacao_media_anual_mm: float | None = None
     anos_chuva_completos: int = 0
     temperatura_media_c: float | None = None
@@ -52,5 +54,18 @@ class ResumoClimatico(BaseModel):
     avisos: list[str] = Field(default_factory=list)
 
 
+class PrevisaoChuva(BaseModel):
+    """Contrato mínimo para adaptar a saída do futuro modelo de chuva."""
+    fonte: str = Field(min_length=1, max_length=100)
+    data_inicio: date
+    data_fim: date
+    resumo: str = Field(min_length=1, max_length=600)
+    precipitacao_prevista_mm: float | None = Field(default=None, ge=0)
+
+
 class ClimaError(RuntimeError):
     """A fonte não forneceu dados com qualidade suficiente para análise."""
+
+
+class PrevisaoChuvaError(RuntimeError):
+    """O modelo de chuva não forneceu previsão utilizável."""

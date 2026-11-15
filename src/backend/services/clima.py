@@ -83,6 +83,29 @@ def resumir_clima(payload: dict, inicio: date, fim: date) -> ResumoClimatico:
         ano_completo = len(dias_ano) == (date(ano + 1, 1, 1) - date(ano, 1, 1)).days
         if ano_completo and all(dia in limpos["PRECTOTCORR"] for dia in dias_ano):
             anuais.append(sum(valores("PRECTOTCORR", dias_ano)))
+    ano_12, mes_12 = divmod(fim.year * 12 + fim.month - 1 - 11, 12)
+    inicio_12 = date(ano_12, mes_12 + 1, 1)
+    proximo_mes = date(fim.year + (fim.month == 12), fim.month % 12 + 1, 1)
+    dias_12 = [dia for dia in datas if inicio_12 <= dia <= fim]
+    chuva_12 = None
+    chuva_12_estimada = False
+    if dias_12 and dias_12[0] == inicio_12 and fim == proximo_mes - timedelta(days=1):
+        meses_12 = {(dia.year, dia.month) for dia in dias_12}
+        totais_12 = []
+        for ano, mes in sorted(meses_12):
+            dias_mes = [dia for dia in dias_12 if dia.year == ano and dia.month == mes]
+            chuva_mes = valores("PRECTOTCORR", dias_mes)
+            if len(chuva_mes) / len(dias_mes) < 0.9:
+                break
+            totais_12.append(sum(chuva_mes) * len(dias_mes) / len(chuva_mes))
+            chuva_12_estimada |= len(chuva_mes) != len(dias_mes)
+        if len(totais_12) == 12:
+            chuva_12 = round(sum(totais_12), 2)
+    if chuva_12_estimada and chuva_12 is not None:
+        avisos.append("Chuva dos últimos 12 meses estimada para dias ausentes em meses com ao menos 90% de cobertura.")
+    if chuva_12 is None:
+        chuva_12_estimada = False
+        avisos.append("O total de chuva dos últimos 12 meses não foi calculado: algum mês tem menos de 90% dos dias válidos.")
     meses = []
     for mes in range(1, 13):
         dias_mes = [dia for dia in datas if dia.month == mes]
@@ -116,6 +139,8 @@ def resumir_clima(payload: dict, inicio: date, fim: date) -> ResumoClimatico:
     maximas = valores("T2M_MAX", datas)
     return ResumoClimatico(
         data_inicio=inicio, data_fim=fim, dias_esperados=len(datas), cobertura_pct=cobertura,
+        precipitacao_ultimos_12_meses_mm=chuva_12,
+        precipitacao_ultimos_12_meses_estimada=chuva_12_estimada,
         precipitacao_media_anual_mm=_media(anuais), anos_chuva_completos=len(anuais),
         temperatura_media_c=media_coberta("T2M", datas),
         temperatura_minima_c=round(min(minimas), 2) if cobertura["T2M_MIN"] >= 90 else None,
