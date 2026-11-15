@@ -5,8 +5,8 @@ from typing import Protocol
 
 from ..models.embrapa import ConsultaZoneamento, CulturaEmbrapa, EmbrapaError, ResultadoZoneamento
 from ..models.recomendacao import (
-    DadosAgricultor, FormaIrrigacao, JanelaCondicional, JanelaRecomendada,
-    OpcaoCultura, RecomendacaoResponse,
+    ConsultaOpcoesCultura, DadosAgricultor, FormaIrrigacao, JanelaCondicional,
+    JanelaRecomendada, OpcaoCultura, RecomendacaoResponse,
 )
 
 
@@ -27,6 +27,17 @@ def _nomes(cultura: CulturaEmbrapa) -> set[str]:
 
 def _opcao(cultura: CulturaEmbrapa) -> OpcaoCultura:
     return OpcaoCultura(id=cultura.id, nome=cultura.nome_completo or cultura.nome, cultivo=cultura.cultivo)
+
+
+def opcoes_para_consulta(consulta: ConsultaOpcoesCultura,
+                        culturas: list[CulturaEmbrapa]) -> list[OpcaoCultura]:
+    """Oferece somente IDs ZARC do município, cultura e modalidade informados."""
+    desejada = _normalizar(consulta.cultura_desejada)
+    modalidade = "sequeiro" if consulta.forma_irrigacao == FormaIrrigacao.SEM_IRRIGACAO else "irrigado"
+    candidatas = [c for c in culturas if c.possui_zoneamento
+                  and _normalizar(c.cultivo or "") == modalidade
+                  and any(nome == desejada or nome.startswith(desejada + " ") for nome in _nomes(c))]
+    return [_opcao(c) for c in candidatas]
 
 
 def _informar(resposta: RecomendacaoResponse, status: str, mensagem: str) -> None:

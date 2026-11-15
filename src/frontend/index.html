@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261114-personalizado-6" />
+  <link rel="stylesheet" href="styles.css?v=20261115-cultura-primeiro-1" />
 </head>
 <body class="bg-[#F6F8F5] text-slate-900 antialiased h-screen overflow-hidden flex flex-col">
 
@@ -409,89 +409,90 @@
          TELA 3: RESULTADOS DEVOLVIDOS PELO BACK-END (FASTAPI)
          ========================================== -->
     <section id="screen-3" class="wizard-screen screen-below" aria-label="Resultado da consulta">
-      <div class="max-w-4xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <div class="result-container w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         <div id="loadingIndicator" class="hidden result-panel text-center" role="status" aria-live="polite">
           <div class="w-12 h-12 border-4 border-emerald-700 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <h2 class="font-extrabold text-lg mt-4">Consultando NASA POWER e Embrapa...</h2>
-          <p class="result-next-step">Buscando períodos de plantio, histórico do clima e orientações para sua área. Isso pode levar alguns instantes.</p>
+          <h2 id="loadingTitle" class="font-extrabold text-lg mt-4">Buscando opções de cultura...</h2>
+          <p class="result-next-step">Aguarde alguns instantes.</p>
         </div>
         <div id="requestError" class="hidden result-panel" role="alert">
-          <h2 class="font-extrabold text-lg">Não foi possível concluir a consulta</h2>
+          <h2 class="font-extrabold text-lg">Confira a consulta</h2>
           <p id="requestErrorText" class="mt-3"></p>
           <button type="button" id="btnRetry" class="action-button mt-4">Tentar novamente</button>
           <button type="button" id="btnErrorEdit" class="secondary-button mt-4">Revisar dados</button>
         </div>
+        <div id="cultureGate" class="hidden result-panel culture-gate" aria-labelledby="cultureGateTitle">
+          <p class="result-eyebrow">Antes dos resultados</p>
+          <h2 id="cultureGateTitle" class="result-headline">Escolha a opção de cultura</h2>
+          <p id="cultureGateRegion" class="result-location"></p>
+          <p class="result-next-step">Escolha a safra e o sistema de cultivo que correspondem à sua lavoura.</p>
+          <div id="cultureSelection" class="mt-4">
+            <div id="cultureOptions" class="culture-choice-list"></div>
+          </div>
+          <p id="cultureGateFeedback" class="hidden result-status" role="status"></p>
+          <button type="button" id="btnCultureEdit" class="result-text-button mt-5">Revisar cultura e irrigação</button>
+        </div>
         <div id="backendResultsWrapper" class="hidden result-stack" aria-live="polite">
           <div class="result-panel result-overview">
             <div class="result-toolbar">
-              <p id="resRegionBadge" class="result-location"></p>
-              <button type="button" id="btnEditInputs" class="secondary-button">Revisar dados</button>
+              <p class="result-eyebrow">Orientação para sua área</p>
+              <button type="button" id="btnViewData" class="result-text-button">Ver dados usados ↓</button>
             </div>
             <h2 id="diagTitle" class="result-headline"></h2>
+            <p id="resRegionBadge" class="result-location"></p>
             <p id="diagText" class="result-next-step"></p>
             <div id="aiGuidance" class="hidden ai-primary">
               <p id="aiSummary" class="result-next-step"></p>
               <ol id="aiActions" class="ai-action-list"></ol>
-              <p class="result-caution">Personalizado pelo Gemini com os dados desta consulta.</p>
             </div>
-            <p id="aiUnavailable" class="hidden guidance-source" role="status">A personalização está indisponível. Confira as orientações gerais e as pendências abaixo.</p>
-            <p class="result-caution">Orientações condicionais. Confira solo, ciclo e safra com assistência técnica antes de plantar.</p>
+            <div id="fallbackGuidance" class="hidden result-fallback">
+              <div id="recommendations" class="guidance-list"></div>
+            </div>
+            <p id="aiAttribution" class="hidden result-caution">Orientação personalizada pelo Gemini a partir dos dados desta consulta.</p>
+            <div class="result-footer"><p class="result-caution">Confirme as condições do talhão antes de plantar.</p><button type="button" id="btnEditInputs" class="result-text-button">Revisar dados</button></div>
           </div>
-          <div class="result-panel">
-            <h3 class="result-section-title">Quando plantar?</h3>
-            <p id="zarcStatus" class="result-status" role="status"></p>
-            <div id="cultureSelection" class="hidden mt-4">
-              <p class="text-sm text-slate-600">Escolha uma opção. A consulta continua com os dados já preenchidos.</p>
-              <div id="cultureOptions" class="culture-choice-list"></div>
+          <div class="result-panel result-zarc-panel">
+            <div class="result-toolbar result-zarc-heading">
+              <div><p class="result-eyebrow">Embrapa · ZARC</p><h3 class="result-section-title">Quando plantar?</h3></div>
+              <span id="zarcCount" class="result-count"></span>
             </div>
-            <details id="confirmedWindowsSection" class="result-more mt-4">
-              <summary>Ver períodos compatíveis por ciclo</summary>
+            <p id="zarcStatus" class="result-status" role="status"></p>
+            <div id="confirmedWindowsSection" class="mt-4">
               <div id="plantingWindows" class="planting-list"></div>
-            </details>
+            </div>
             <div id="conditionalWindowsSection" class="hidden mt-5">
               <h4 class="font-extrabold text-amber-900">Confirme o solo antes de usar estes períodos</h4>
               <p class="text-sm text-amber-900 mt-1">As opções abaixo são condicionais e ainda não validam o plantio.</p>
               <button type="button" id="btnReviewSoil" class="secondary-button mt-3">Revisar classificação do solo</button>
-              <details class="result-more mt-3"><summary>Ver períodos condicionais</summary>
-                <div id="conditionalWindows" class="planting-list"></div>
-              </details>
+              <div id="conditionalWindows" class="planting-list"></div>
             </div>
-            <details class="mt-4 text-sm">
+            <p class="result-zarc-note">Confirme o grupo de ciclo, a classificação do solo e a safra. Períodos compatíveis não autorizam plantar hoje.</p>
+            <details id="pendingDetails" class="guidance-disclosure guidance-pending">
+              <summary>Antes de plantar <span id="pendingCount" class="guidance-count"></span></summary>
+              <ul id="pendingItems" class="result-list"></ul>
+            </details>
+            <details class="mt-4 text-sm result-diagnostics">
               <summary class="font-bold cursor-pointer">Detalhes da consulta ZARC</summary>
               <p id="zarcMessage" class="text-sm text-slate-600 mt-2"></p>
               <ul id="zarcDiagnostics" class="result-list"></ul>
             </details>
           </div>
-          <div class="result-panel guidance-panel">
-            <div id="fallbackGuidance">
-              <h3 class="result-section-title">Como cuidar da área?</h3>
-              <p class="guidance-intro">Orientações gerais · personalização indisponível nesta consulta.</p>
-              <div id="recommendations" class="guidance-list"></div>
-            </div>
-            <details id="pendingDetails" class="guidance-disclosure guidance-pending">
-              <summary>Pendências para validar <span id="pendingCount" class="guidance-count"></span></summary>
-              <ul id="pendingItems" class="result-list"></ul>
+          <section class="result-panel result-climate-panel" id="nasaPanel" aria-labelledby="climateTitle">
+            <p class="result-eyebrow">NASA POWER</p>
+            <h3 id="climateTitle" class="result-section-title">Histórico do clima</h3>
+            <p id="nasaStatus" class="text-slate-600 mt-2"></p>
+            <div id="climateMetrics" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4"></div>
+            <div id="climateChart" class="mt-5"></div>
+            <details class="result-more mt-4"><summary>Ver tabela mês a mês</summary>
+              <div id="climateMonthly" class="mt-4 overflow-x-auto"></div>
             </details>
+          </section>
+          <details class="result-panel result-more" id="technicalDetails">
+            <summary>Dados e fontes da consulta</summary>
             <details id="warningDetails" class="guidance-disclosure">
               <summary>Avisos e limitações <span id="warningCount" class="guidance-count"></span></summary>
               <ul id="warningItems" class="result-list"></ul>
             </details>
-          </div>
-          <details class="result-panel result-more" id="technicalDetails">
-            <summary>Dados e fontes da consulta</summary>
-          <details class="guidance-disclosure result-more">
-            <summary>Publicações da Embrapa</summary>
-            <p class="text-sm text-slate-600 mt-1">Conteúdo de publicações; a aplicação à propriedade exige avaliação das condições locais.</p>
-            <div id="technicalReferences" class="space-y-4 mt-4"></div>
-          </details>
-          <details class="guidance-disclosure result-more" id="nasaPanel">
-            <summary>Histórico do clima · NASA</summary>
-            <p id="nasaStatus" class="text-slate-600 mt-2">Análise climática indisponível nesta consulta.</p>
-            <div id="climateMetrics" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4"></div>
-            <details class="result-more mt-4"><summary>Ver mês a mês</summary>
-              <div id="climateMonthly" class="mt-4 overflow-x-auto"></div>
-            </details>
-          </details>
           <details class="guidance-disclosure result-more text-sm">
             <summary>Fontes e arquivo da consulta</summary>
             <ul id="resultSources" class="result-list"></ul>
@@ -505,6 +506,6 @@
 
   </form>
 
-  <script type="module" src="app.js?v=20261114-personalizado-6"></script>
+  <script type="module" src="app.js?v=20261115-cultura-primeiro-1"></script>
 </body>
 </html>

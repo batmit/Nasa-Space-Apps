@@ -6,9 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..integration.embrapa import EmbrapaClient, EmbrapaError, RespondeAgroClient
 from ..integration.localizacao import LocalizacaoClient, LocalizacaoError
-from ..models.recomendacao import DadosAgricultor, LocalizacaoSelecionada, RecomendacaoResponse
+from ..models.recomendacao import (
+    ConsultaOpcoesCultura, DadosAgricultor, LocalizacaoSelecionada,
+    OpcoesCulturaResponse, RecomendacaoResponse,
+)
 from ..services.recomendacao import RecomendacaoService
 from ..services.clima import NasaClimaService
+from ..services.zoneamento import opcoes_para_consulta
 
 router = APIRouter()
 
@@ -74,6 +78,26 @@ def resolver_localizacao(
         return localizador.resolver_localizacao(latitude, longitude)
     except LocalizacaoError as exc:
         raise HTTPException(status_code=422 if exc.entrada_invalida else 502, detail=str(exc)) from None
+
+
+@router.post(
+    "/culturas/opcoes", response_model=OpcoesCulturaResponse, tags=["ZARC"],
+    summary="Listar opções ZARC antes da recomendação",
+)
+def listar_opcoes_cultura(
+    consulta: ConsultaOpcoesCultura,
+    localizador: Annotated[LocalizacaoClient, Depends(obter_localizador)],
+) -> OpcoesCulturaResponse:
+    if not os.getenv("EMBRAPA_ACCESS_TOKEN"):
+        raise HTTPException(status_code=503, detail="Catálogo ZARC sem acesso configurado no servidor.")
+    try:
+        municipio = localizador.resolver_municipio(consulta.latitude, consulta.longitude)
+        culturas = EmbrapaClient().listar_culturas_municipio(municipio.codigo_ibge)
+        return OpcoesCulturaResponse(municipio=municipio, opcoes=opcoes_para_consulta(consulta, culturas))
+    except LocalizacaoError as exc:
+        raise HTTPException(status_code=422 if exc.entrada_invalida else 502, detail=str(exc)) from None
+    except EmbrapaError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from None
 
 
 @router.post(

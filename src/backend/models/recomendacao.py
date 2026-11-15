@@ -67,6 +67,19 @@ class OpcaoCultura(BaseModel):
     cultivo: str | None = None
 
 
+class ConsultaOpcoesCultura(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid", allow_inf_nan=False)
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    cultura_desejada: str = Field(min_length=1, max_length=100)
+    forma_irrigacao: FormaIrrigacao
+
+
+class OpcoesCulturaResponse(BaseModel):
+    municipio: Municipio
+    opcoes: list[OpcaoCultura]
+
+
 class JanelaRecomendada(BaseModel):
     cultura: str
     solo: str

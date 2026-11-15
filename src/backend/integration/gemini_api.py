@@ -13,6 +13,8 @@ cada uma com uma frase de até 220 caracteres. Priorize o próximo passo,
 o objetivo e as restrições do agricultor. Evite repetir dados, listar métricas,
 jargões, saudações e introduções. Não use Markdown ou listas dentro das strings.
 Se faltar escolher a cultura ou confirmar o solo no ZARC, destaque isso no resumo.
+Evite as palavras "inconclusivo" e "indisponível" na orientação ao agricultor.
+Quando faltar uma fonte ou confirmação, indique o próximo passo sem sugerir que o plantio foi validado.
 Mencione rotação ou cobertura somente quando pertinente, sem inventar uma espécie
 validada. Não é obrigatório preencher três ações se as evidências forem escassas.
 Use somente as evidências fornecidas para afirmações específicas sobre a

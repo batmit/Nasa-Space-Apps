@@ -11,33 +11,56 @@ function list(id, values, emptyText) {
   container.replaceChildren(...(values.length ? values : [emptyText]).map((value) => element("li", value)));
 }
 
+function noticeForFarmer(message) {
+  if (/orientação por ia|respondeagro/i.test(message) && /indisponível|não configurad/i.test(message)) return null;
+  if (/análise climática|fonte climática/i.test(message) && /indisponível|não configurad/i.test(message)) {
+    return "Consulte novamente para ver o histórico climático.";
+  }
+  if (/zoneamento|zarc|agritec/i.test(message) && /indisponível|não configurad|falha/i.test(message)) {
+    return "Consulte novamente o ZARC antes de definir a data de plantio.";
+  }
+  if (/época de plantio.*não foi validada/i.test(message)) return "Confira os períodos ZARC antes de definir a data de plantio.";
+  return message;
+}
+
+export function renderCultureOptions(options, onChooseCulture) {
+  const container = document.getElementById("cultureOptions");
+  document.getElementById("cultureSelection").classList.toggle("hidden", !options.length);
+  container.replaceChildren(...options.map((option) => {
+    const button = element("button", `Consultar ${option.nome}`, "secondary-button");
+    button.type = "button";
+    button.addEventListener("click", () => onChooseCulture(option));
+    return button;
+  }));
+}
+
 export function renderResults(data, onChooseCulture, onReviewSoil) {
   if (!["orientacao_condicional", "dados_insuficientes"].includes(data?.status)
       || !data.municipio || !data.dados_informados
       || !["janelas", "orientacoes", "pendencias", "avisos", "referencias", "fontes", "opcoes_cultura"].every((key) => Array.isArray(data[key]))) {
     throw new Error("O resultado recebido não está no formato esperado. Tente novamente.");
   }
-  document.getElementById("resRegionBadge").textContent = `${data.municipio.nome}, ${data.municipio.uf}`;
+  const informed = data.dados_informados;
+  const crop = informed.cultura_desejada?.replaceAll("_", " ") || "Cultura não informada";
+  const irrigation = informed.forma_irrigacao === "sem_irrigacao" ? "de sequeiro" : "irrigada";
+  const soil = informed.tipo_solo?.toUpperCase().match(/^AD[1-6]$/)
+    ? `Solo ${informed.tipo_solo.toUpperCase()}` : null;
+  document.getElementById("resRegionBadge").textContent = [
+    `${data.municipio.nome}, ${data.municipio.uf}`, `${crop} ${irrigation}`, soil,
+  ].filter(Boolean).join(" · ");
   const confirmed = data.janelas_confirmadas || data.janelas;
   const ambiguous = data.status_zarc === "cultura_ambigua";
   document.getElementById("diagTitle").textContent = ambiguous ? "Escolha a opção de cultura"
     : confirmed.length ? "Há períodos compatíveis com seus dados"
     : data.status_zarc === "classe_solo_pendente" ? "Falta confirmar a classe do solo"
-    : "O plantio ainda precisa ser validado";
+    : "Confira os dados de plantio";
   document.getElementById("diagText").textContent = ambiguous
     ? "Escolha a safra e o sistema de cultivo abaixo para ver os períodos de plantio."
     : confirmed.length ? `${data.cultura?.nome || data.dados_informados.cultura_desejada}: confira o período do grupo de ciclo da sua cultivar.`
     : data.status_zarc === "classe_solo_pendente" ? "Informe a classe AD da avaliação técnica. As opções de plantio ainda são condicionais."
-    : "Confira o motivo em “Quando plantar?” e as pendências de manejo abaixo.";
+    : "Confira os períodos e condições em “Quando plantar?”.";
 
-  const options = document.getElementById("cultureOptions");
-  document.getElementById("cultureSelection").classList.toggle("hidden", !data.opcoes_cultura.length);
-  options.replaceChildren(...data.opcoes_cultura.map((option) => {
-    const button = element("button", `Consultar ${option.nome}`, "secondary-button");
-    button.type = "button";
-    button.addEventListener("click", () => onChooseCulture(option));
-    return button;
-  }));
+  renderCultureOptions(data.opcoes_cultura, onChooseCulture);
   renderZarc(data, onReviewSoil);
   renderGemini(data);
   const titles = {
@@ -65,32 +88,17 @@ export function renderResults(data, onChooseCulture, onReviewSoil) {
     section.append(details);
     return section;
   }));
-  if (!data.orientacoes.length) recommendations.append(element("p", "Não há orientação conclusiva para esta consulta."));
-  list("pendingItems", data.pendencias, "Nenhuma pendência adicional registrada.");
-  list("warningItems", data.avisos, "Nenhum aviso adicional retornado.");
-  document.getElementById("pendingCount").textContent = String(data.pendencias.length);
-  document.getElementById("warningCount").textContent = String(data.avisos.length);
-  document.getElementById("pendingDetails").open = data.pendencias.length > 0;
+  if (!data.orientacoes.length) recommendations.append(element("p", "Confira os dados da área e os períodos de plantio."));
+  const pending = data.pendencias.map(noticeForFarmer).filter(Boolean);
+  const warnings = data.avisos.map(noticeForFarmer).filter(Boolean);
+  list("pendingItems", pending, "Nenhuma etapa adicional registrada.");
+  list("warningItems", warnings, "Nenhum aviso adicional registrado.");
+  document.getElementById("pendingCount").textContent = String(pending.length);
+  document.getElementById("warningCount").textContent = String(warnings.length);
+  document.getElementById("pendingDetails").open = pending.length > 0;
   document.getElementById("warningDetails").open = false;
+  document.getElementById("technicalDetails").open = false;
   list("resultSources", data.fontes, "Nenhuma fonte informada.");
-  const references = document.getElementById("technicalReferences");
-  references.replaceChildren(...data.referencias.map((item) => {
-    const card = element("article", "", "result-card");
-    card.append(element("h4", item.pergunta, "font-extrabold"), element("p", item.resposta, "mt-2"),
-      element("p", [item.livro, item.capitulo, item.ano].filter(Boolean).join(" · "), "text-sm text-slate-500 mt-2"));
-    try {
-      const url = new URL(item.url_publicacao);
-      if (url.protocol === "https:") {
-        const link = element("a", "Consultar publicação", "reference-link");
-        link.href = url.href;
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
-        card.append(link);
-      }
-    } catch { /* Referência sem endereço utilizável: mantém o conteúdo e a origem. */ }
-    return card;
-  }));
-  if (!data.referencias.length) references.append(element("p", "Nenhuma referência foi retornada nesta consulta."));
   renderClimate(data.resumo_climatico, data.analise_climatica_realizada);
 }
 
@@ -106,18 +114,17 @@ export function renderGemini(data) {
   panel.classList.toggle("hidden", !available);
   document.getElementById("fallbackGuidance").classList.toggle("hidden", available);
   document.getElementById("diagText").classList.toggle("hidden", available);
-  document.getElementById("aiUnavailable").classList.toggle("hidden",
-    data.status_ia !== "indisponivel" && !(data.status_ia === "disponivel" && !available));
+  document.getElementById("aiAttribution").classList.toggle("hidden", !available);
   if (!available) return;
-  document.getElementById("diagTitle").textContent = "Sua orientação personalizada";
+  document.getElementById("diagTitle").textContent = "Seu próximo passo";
   summary.textContent = output.resumo;
   const evidenceLabel = (id) => id === "usuario" ? "Dados informados"
     : id === "nasa:resumo" ? "Histórico NASA"
     : id.startsWith("zarc:condicional:") ? "Período ZARC condicional"
     : id.startsWith("zarc:janela:") ? "Período ZARC compatível"
-    : id.startsWith("embrapa:referencia:") ? "Publicação da Embrapa" : "Evidência a conferir";
+    : id.startsWith("embrapa:referencia:") ? "Referência técnica" : "Evidência a conferir";
   actions.replaceChildren(...output.actions.map((action) => {
-    const item = element("li", "");
+    const item = element("li", "", "ai-action-item");
     item.append(element("p", action.description));
     const evidence = element("details", "", "guidance-evidence");
     evidence.append(element("summary", "Dados utilizados"), element("p",
@@ -131,43 +138,67 @@ export function renderZarc(data, onReviewSoil) {
   const labels = {
     disponivel: "ZARC: janelas compatíveis com os filtros",
     parcial: "ZARC: há janelas compatíveis e outras condicionais",
-    classe_solo_pendente: "ZARC: classificação do solo pendente",
+    classe_solo_pendente: "ZARC: confirme a classificação do solo",
     cultura_ambigua: "ZARC: selecione a opção de cultura",
     cultura_nao_encontrada: "ZARC: cultura não encontrada no município",
     cultura_invalida: "ZARC: selecione novamente a cultura",
-    modalidade_indisponivel: "ZARC: modalidade indisponível",
-    sem_dados: "ZARC: consulta sem dados",
+    modalidade_indisponivel: "ZARC: revise a forma de irrigação",
+    sem_dados: "ZARC: confira outra opção de cultura",
     sem_dados_compativeis: "ZARC: janelas retornadas não atendem aos filtros",
-    nao_configurado: "ZARC: fonte não configurada",
-    falha_autenticacao: "ZARC: acesso à Embrapa recusado",
-    limite_consultas: "ZARC: limite de consultas atingido",
-    falha_conexao: "ZARC: falha de conexão",
-    resposta_invalida: "ZARC: resposta incompatível",
-    falha_api: "ZARC: falha na consulta",
+    nao_configurado: "ZARC: consulte novamente",
+    falha_autenticacao: "ZARC: confira o acesso ao catálogo",
+    limite_consultas: "ZARC: tente consultar novamente",
+    falha_conexao: "ZARC: tente consultar novamente",
+    resposta_invalida: "ZARC: tente consultar novamente",
+    falha_api: "ZARC: tente consultar novamente",
   };
   document.getElementById("zarcStatus").textContent = labels[data.status_zarc] || "ZARC: confira o resultado da consulta";
-  document.getElementById("zarcMessage").textContent = data.mensagem_zarc || "Confira as pendências e as condições de cada período.";
-  const card = (window, conditional) => {
+  const retryZarc = ["nao_configurado", "falha_autenticacao", "limite_consultas", "falha_conexao", "resposta_invalida", "falha_api"];
+  document.getElementById("zarcMessage").textContent = noticeForFarmer(retryZarc.includes(data.status_zarc)
+    ? "Consulte novamente o ZARC antes de definir a data de plantio."
+    : data.mensagem_zarc || "Confira as condições de cada período.")
+    || "Confira as condições de cada período.";
+  const groupWindows = (windows) => {
+    const groups = new Map();
+    for (const window of windows) {
+      const key = [window.cultura, window.solo, window.ciclo, window.safra_inicio,
+        window.safra_fim, window.risco, window.condicao || ""].join("|");
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(window);
+    }
+    return [...groups.values()];
+  };
+  const card = (group, conditional) => {
+    const window = group[0];
     const article = element("article", "", conditional ? "planting-item conditional-window" : "planting-item");
-    article.append(element("h4", window.ciclo, "result-subtitle"),
-      element("p", `${window.dia_inicio}/${window.mes_inicio} a ${window.dia_fim}/${window.mes_fim}`, "window-period"),
-      element("p", `Solo ${window.solo} · Safra ${window.safra_inicio}/${window.safra_fim} · Risco ${window.risco}%`, "planting-meta"));
+    article.append(element("h4", window.ciclo || "Ciclo não informado", "result-subtitle"));
+    for (const period of group) article.append(element("p",
+      `${String(period.dia_inicio).padStart(2, "0")}/${String(period.mes_inicio).padStart(2, "0")} – ${String(period.dia_fim).padStart(2, "0")}/${String(period.mes_fim).padStart(2, "0")}`,
+      "window-period"));
+    article.append(element("p", `Safra ${window.safra_inicio}/${window.safra_fim} · Solo ${window.solo} · Risco ${window.risco}%`, "planting-meta"));
     const source = element("details", "", "guidance-evidence");
-    source.append(element("summary", "Cultura e portaria"), element("p", window.cultura), element("p", window.portaria));
+    source.append(element("summary", "Cultura e portaria"), element("p", window.cultura));
+    for (const portaria of [...new Set(group.map((period) => period.portaria).filter(Boolean))]) {
+      source.append(element("p", portaria));
+    }
     article.append(source);
     if (conditional) article.append(element("p", window.condicao, "font-bold text-amber-900 mt-3"));
     return article;
   };
   const confirmed = data.janelas_confirmadas || data.janelas || [];
   const conditional = data.janelas_condicionais || [];
+  const count = document.getElementById("zarcCount");
+  count.textContent = confirmed.length ? `${confirmed.length} ${confirmed.length === 1 ? "período compatível" : "períodos compatíveis"}`
+    : conditional.length ? `${conditional.length} ${conditional.length === 1 ? "período condicional" : "períodos condicionais"}`
+    : "Confira os períodos";
+  count.classList.toggle("result-count-pending", !confirmed.length);
   const windows = document.getElementById("plantingWindows");
   document.getElementById("confirmedWindowsSection").classList.toggle("hidden", !confirmed.length);
-  document.getElementById("confirmedWindowsSection").open = false;
-  windows.replaceChildren(...confirmed.map((window) => card(window, false)));
+  windows.replaceChildren(...groupWindows(confirmed).map((group) => card(group, false)));
   if (!confirmed.length) windows.append(element("p", data.status_zarc === "cultura_ambigua"
     ? "Aguardando sua escolha de cultura acima para consultar as janelas."
-    : "Nenhuma janela foi confirmada para os filtros informados."));
-  document.getElementById("conditionalWindows").replaceChildren(...conditional.map((window) => card(window, true)));
+    : "Confira outra opção de cultura ou consulte novamente."));
+  document.getElementById("conditionalWindows").replaceChildren(...groupWindows(conditional).map((group) => card(group, true)));
   document.getElementById("conditionalWindowsSection").classList.toggle("hidden", !conditional.length);
   const button = document.getElementById("btnReviewSoil");
   button.disabled = typeof onReviewSoil !== "function";
@@ -184,10 +215,12 @@ export function renderZarc(data, onReviewSoil) {
 export function renderClimate(climate, available) {
   const metrics = document.getElementById("climateMetrics");
   const monthly = document.getElementById("climateMonthly");
+  const chart = document.getElementById("climateChart");
   metrics.replaceChildren();
   monthly.replaceChildren();
+  chart.replaceChildren();
   if (!available || !climate) {
-    document.getElementById("nasaStatus").textContent = "Análise climática indisponível nesta consulta. Nenhuma métrica foi inventada; confira os avisos.";
+    document.getElementById("nasaStatus").textContent = "Consulte novamente para ver o histórico climático deste local.";
     return;
   }
   document.getElementById("nasaStatus").textContent = `NASA POWER · ${climate.data_inicio} a ${climate.data_fim}. Histórico recente, não uma previsão.`;
@@ -213,7 +246,45 @@ export function renderClimate(climate, available) {
   head.append(header);
   const body = element("tbody", "");
   const names = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-  for (const month of climate.meses || []) {
+  const months = Array.isArray(climate.meses) ? climate.meses : [];
+  const rainfall = months.map((month) => month.precipitacao_media_mm)
+    .filter((value) => typeof value === "number" && Number.isFinite(value) && value >= 0);
+  if (months.length && rainfall.length) {
+    const figure = element("figure", "", "climate-figure");
+    figure.append(element("figcaption", "Chuva média por mês", "climate-chart-title"),
+      element("p", "Barras mostram chuva em mm/mês. A temperatura média aparece abaixo de cada mês.", "climate-chart-help"));
+    const scroll = element("div", "", "climate-chart-scroll");
+    const bars = element("div", "", "climate-bars");
+    const maximum = Math.max(...rainfall, 1);
+    for (const month of months) {
+      const rain = month.precipitacao_media_mm;
+      const validRain = typeof rain === "number" && Number.isFinite(rain) && rain >= 0;
+      const temperature = month.temperatura_media_c;
+      const validTemperature = typeof temperature === "number" && Number.isFinite(temperature);
+      const column = element("div", "", "climate-month");
+      const rainLabel = validRain ? `${rain.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mm` : "Sem dados";
+      const temperatureLabel = validTemperature
+        ? `${temperature.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} °C` : "Temp. sem dados";
+      column.setAttribute("aria-label", `${names[month.mes - 1] || month.mes}: chuva ${rainLabel}; temperatura ${temperatureLabel}`);
+      column.append(element("span", rainLabel, "climate-rain-value"));
+      const track = element("div", "", "climate-bar-track");
+      if (validRain) {
+        const bar = element("div", "", "climate-bar");
+        bar.style.height = `${(rain / maximum) * 100}%`;
+        bar.setAttribute("aria-hidden", "true");
+        track.append(bar);
+      }
+      column.append(track, element("span", names[month.mes - 1] || String(month.mes), "climate-month-name"),
+        element("span", temperatureLabel, "climate-temperature"));
+      bars.append(column);
+    }
+    scroll.append(bars);
+    figure.append(scroll);
+    chart.append(figure);
+  } else {
+    chart.append(element("p", "Não há médias mensais de chuva suficientes para o gráfico.", "climate-chart-help"));
+  }
+  for (const month of months) {
     const row = element("tr", "");
     for (const value of [names[month.mes - 1] || month.mes, format(month.precipitacao_media_mm, ""),
       format(month.temperatura_media_c, ""), month.anos_chuva_completos]) row.append(element("td", value));
