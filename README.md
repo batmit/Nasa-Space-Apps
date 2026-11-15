@@ -249,6 +249,17 @@ observações completas de cada mês permanece explícita em `anos_chuva_complet
 Radiação é normalizada para **MJ/m²/dia** e a umidade é **relativa do ar a 2 m**,
 não umidade das raízes. Lacunas e limitações são apresentadas na resposta.
 
+O campo `resumo_climatico.projecao_chuva` estima os próximos 12 meses completos,
+começando no mês seguinte ao da consulta. Para cada mês futuro, repete a média
+dos totais daquele mês do ano encontrados nos 18 meses históricos. Por exemplo,
+dois janeiros com 180 e 220 mm geram uma estimativa de 200 mm para o próximo janeiro.
+Cada item informa ano, mês, `precipitacao_estimada_mm` e quantidade de meses
+históricos completos utilizados; `total_estimado_mm` soma as 12 estimativas.
+Se um mês não tiver histórico completo, sua estimativa e o total ficam ausentes,
+sem tratar lacunas como zero. O frontend exibe as estimativas e o total.
+É uma projeção sazonal simples para o protótipo, sem treinamento ou novas
+dependências; assume repetição do padrão recente, não uma previsão meteorológica validada.
+
 As regras de manejo são separadas da coleta e explicam seus fundamentos:
 
 - Janelas compatíveis → orientar o planejamento dentro das condições ZARC.

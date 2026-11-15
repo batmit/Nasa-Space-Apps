@@ -52,15 +52,6 @@ def _write_json(path: Path, payload: dict) -> None:
 
 
 def request_NASA_API(latitude: float, longitude: float, start: str, end: str, *, force_refresh: bool = False) -> dict:
-    """Salva e retorna o JSON bruto; datas devem estar no formato YYYYMMDD.
-
-    Exemplo: request_NASA_API(-20.385, -43.503, "20250101", "20251231").
-    Cada consulta ocupa raw/nasa_power/<início>_<fim>_<hash>/, contendo
-    response.json e metadata.json. Consultas idênticas reutilizam o arquivo
-    local; force_refresh=True atualiza a coleta. Não há expiração automática.
-    Os caminhos são relativos a este módulo, independentemente do diretório
-    de execução. Erros de persistência são propagados como OSError.
-    """
     latitude, longitude = float(latitude), float(longitude)
     if not math.isfinite(latitude) or not -90 <= latitude <= 90:
         raise ValueError("Latitude deve estar entre -90 e 90 e ser finita.")

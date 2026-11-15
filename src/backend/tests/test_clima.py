@@ -140,6 +140,43 @@ def test_dezoito_meses_preservam_total_do_ano_civil_completo_quando_existente():
     assert resumo.precipitacao_media_anual_mm == 310
 
 
+def test_projecao_usa_media_do_mes_e_retorna_proximos_doze_meses():
+    inicio, fim = date(2025, 5, 1), date(2026, 10, 31)
+    payload = payload_periodo(inicio, fim)
+    chuva = payload["properties"]["parameter"]["PRECTOTCORR"]
+    for dia in range(1, 32):
+        chuva[f"202505{dia:02d}"] = 1.0
+        chuva[f"202605{dia:02d}"] = 3.0
+    with patch("src.backend.services.clima.request_NASA_API", return_value=payload):
+        resumo = NasaClimaService(hoje=date(2026, 11, 15)).obter_resumo(-20, -43)
+    projecao = resumo.projecao_chuva
+    assert len(projecao.meses) == 12
+    assert [(mes.ano, mes.mes) for mes in projecao.meses] == (
+        [(2026, 12)] + [(2027, mes) for mes in range(1, 12)]
+    )
+    janeiro = next(mes for mes in projecao.meses if mes.mes == 1)
+    maio = next(mes for mes in projecao.meses if mes.mes == 5)
+    assert janeiro.precipitacao_estimada_mm == 310
+    assert janeiro.meses_historicos_utilizados == 1
+    assert maio.precipitacao_estimada_mm == 62  # Média de 31 e 93 mm.
+    assert maio.meses_historicos_utilizados == 2
+    assert projecao.total_estimado_mm == 372
+    assert resumo.precipitacao_media_anual_mm is None
+
+
+def test_mes_sem_chuva_completa_nao_vira_zero_na_projecao():
+    inicio, fim = date(2025, 5, 1), date(2026, 10, 31)
+    payload = payload_periodo(inicio, fim)
+    payload["properties"]["parameter"]["PRECTOTCORR"]["20260101"] = -999
+    with patch("src.backend.services.clima.request_NASA_API", return_value=payload):
+        resumo = NasaClimaService(hoje=date(2026, 11, 15)).obter_resumo(-20, -43)
+    janeiro = next(mes for mes in resumo.projecao_chuva.meses if mes.mes == 1)
+    assert janeiro.precipitacao_estimada_mm is None
+    assert janeiro.meses_historicos_utilizados == 0
+    assert resumo.projecao_chuva.total_estimado_mm is None
+    assert resumo.model_dump(mode="json")["projecao_chuva"]["meses"][1]["precipitacao_estimada_mm"] is None
+
+
 def test_falha_de_cache_da_nasa_e_tratada_como_fonte_indisponivel():
     with patch("src.backend.services.clima.request_NASA_API", side_effect=PermissionError()):
         with pytest.raises(ClimaError):
