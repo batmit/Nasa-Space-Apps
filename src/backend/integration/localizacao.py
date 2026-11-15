@@ -39,7 +39,7 @@ class LocalizacaoClient:
     _lock = Lock()
     _ultima_consulta = 0.0
 
-    def __init__(self, *, timeout: float = 15.0):
+    def __init__(self, *, timeout: float = 30.0):
         self._base_url = os.getenv("NOMINATIM_BASE_URL", "https://nominatim.openstreetmap.org").rstrip("/")
         if not self._base_url.startswith("https://"):
             raise ValueError("NOMINATIM_BASE_URL deve utilizar HTTPS.")
