@@ -1,10 +1,40 @@
-# Nasa-Space-Apps
+# AgroBit
 
-AgroOrbit — planejamento de rotação de culturas com dados climáticos.
+**Sistema de apoio ao planejamento de rotação de culturas com dados da NASA e da Embrapa.**
 
-## Executar a API
+O AgroBit reúne informações sobre clima, zoneamento agrícola e manejo para ajudar a analisar uma área antes do plantio. A pessoa informa onde fica a propriedade, a cultura desejada e as condições da área; a aplicação apresenta orientações com suas fontes, avisos e pontos que ainda precisam de avaliação técnica.
 
-Na raiz do repositório:
+## Problema e solução
+
+Planejar uma rotação de culturas exige considerar clima, solo, irrigação, histórico de uso e condições locais de plantio. Essas informações estão espalhadas por diferentes fontes e nem sempre permitem uma resposta definitiva para uma propriedade.
+
+O AgroBit organiza os dados em uma consulta: identifica o município, resume o histórico climático da NASA POWER, consulta as janelas do Zoneamento Agrícola de Risco Climático (ZARC) e reúne referências da Embrapa. Quando faltam dados ou uma integração está indisponível, o resultado mostra a pendência em vez de tratar a informação como validada.
+
+## O que a aplicação faz
+
+1. Permite localizar a área por busca, GPS, coordenadas ou seleção no mapa.
+2. Recebe cultura, solo, pH, irrigação, histórico da área, objetivo e restrições.
+3. Oferece as opções de cultura ZARC do município para seleção explícita, quando a Agritec está configurada.
+4. Apresenta indicadores climáticos, janelas ZARC, orientações de manejo, referências e pendências.
+5. Permite exportar o resultado em JSON.
+
+Com uma chave configurada, o Gemini também pode resumir o contexto e sugerir até três ações associadas às evidências reunidas. Sem essa integração, as orientações gerais continuam disponíveis. O formulário inclui um **modo de demonstração de sensor**, que usa dados hipotéticos e não se conecta a um dispositivo físico.
+
+## Tecnologias e fontes
+
+| Área | Tecnologias e serviços |
+| --- | --- |
+| Backend | Python, FastAPI |
+| Frontend | HTML, CSS e JavaScript, com Tailwind CSS, Leaflet e Lucide |
+| Dados climáticos | NASA POWER |
+| Zoneamento e referências | Agritec/ZARC e RespondeAgro, da Embrapa |
+| Localização e mapas | Nominatim/OpenStreetMap, IBGE e camada de satélite Esri |
+| AI | Gemini Agent SDK |
+| Testes e deploy | pytest, Node.js, Playwright e Vercel |
+
+## Executar localmente
+
+Requer Python 3.12. Na raiz do repositório:
 
 ```bash
 python -m venv .venv
@@ -13,312 +43,66 @@ python -m pip install -r requirements.txt
 python -m uvicorn src.backend.main:app --reload
 ```
 
-Documentação interativa: http://127.0.0.1:8000/docs
+No PowerShell, ative o ambiente com `.\.venv\Scripts\Activate.ps1`. Abra a interface em **http://127.0.0.1:8000/** e a documentação interativa da API em **http://127.0.0.1:8000/docs**. O frontend é servido pelo FastAPI; não abra `index.html` diretamente. Tailwind, Leaflet, Lucide, fontes e mapas são carregados de serviços externos e exigem conexão à internet.
 
-No PowerShell, ative o ambiente com `.\.venv\Scripts\Activate.ps1`.
-Interface integrada: **http://127.0.0.1:8000/**. Abra pelo servidor, não pelo
-arquivo `index.html`: os módulos JavaScript e as chamadas usam a mesma origem.
-As dependências visuais (Tailwind, Leaflet, Lucide, fontes e mapas) usam CDN e
-precisam de conexão à internet.
+### Configuração opcional
 
-## Deploy na Vercel
+Configure as variáveis no ambiente do servidor, sem expor tokens no frontend. O projeto não carrega `.env` automaticamente.
 
-Importe este repositório na Vercel com **Root Directory na raiz do repositório
-(`.`)**. O `vercel.json` seleciona o preset **FastAPI** e configura o limite da
-função em 300 segundos. Deixe **Build Command**, **Install Command** e
-**Output Directory** nos padrões do preset; não configure um build npm.
-
-O `pyproject.toml` aponta para `src.backend.main:app`, a `.python-version`
-seleciona Python 3.12 e as dependências continuam em `requirements.txt`.
-O próprio FastAPI já serve a interface: `/` abre o frontend e `/api/v1/*`
-atende a API na mesma origem, sem precisar alterar os caminhos do JavaScript.
-
-Em **Settings → Environment Variables**, configure os valores necessários
-para **Production** e **Preview**:
-
-| Variável | Uso |
+| Variável | Finalidade |
 | --- | --- |
-| `EMBRAPA_ACCESS_TOKEN` | Habilitar a consulta Agritec/ZARC. |
-| `EMBRAPA_RESPONDEAGRO_TOKEN` | Token específico da RespondeAgro, quando diferente do token Agritec. |
-| `GEMINI_API_KEY` | Habilitar a orientação por IA. |
-| `GEMINI_MODEL` | Opcional: substituir o modelo definido no backend. |
-| `NOMINATIM_USER_AGENT` | Identificar a aplicação e o contato do responsável. |
-| `NOMINATIM_BASE_URL` | Opcional: substituir o provedor padrão de geocodificação. |
+| `EMBRAPA_ACCESS_TOKEN` | Habilita o catálogo de culturas e as janelas ZARC da Agritec. |
+| `EMBRAPA_RESPONDEAGRO_TOKEN` | Token da RespondeAgro; se omitido, usa o token Agritec. |
+| `GEMINI_API_KEY` | Habilita a orientação personalizada por IA. |
+| `GEMINI_MODEL` | Substitui o modelo Gemini padrão. |
+| `NOMINATIM_USER_AGENT` | Identifica a aplicação nas consultas de localização. |
+| `NOMINATIM_BASE_URL` | Substitui o endereço padrão do Nominatim. |
 
-Cadastre os segredos diretamente na Vercel; não envie arquivos `.env`.
-Depois de alterar as variáveis, faça um novo deploy para aplicá-las.
-A `.vercelignore` exclui ambientes locais, segredos, caches e arquivos de teste
-dos uploads feitos pela CLI; `.vercel/` fica fora do Git.
+A NASA POWER não exige token. Sem acesso à Embrapa, a consulta ainda pode apresentar dados climáticos e orientações gerais, mas informa que as janelas ZARC e referências correspondentes não foram verificadas. Reinicie o servidor após mudar as variáveis.
 
-Após o deploy, confira `/`, `/api/v1/health` e uma consulta pelo formulário.
-O health verifica apenas se a API responde. Na Vercel, o cache NASA usa
-`/tmp/nasa_power`; ele é temporário e pode ser descartado entre execuções.
+## API
 
-## Interface integrada
-
-O layout importado de `agroorbit-frontend-v4-unificado.zip` mantém o fluxo de
-três etapas: localização, informações da área e resultado.
-
-- `src/frontend/app.js`: navegação, mapa, controles e estado da consulta.
-- `src/frontend/api.js`: construção do JSON, comunicação HTTP e erros.
-- `src/frontend/results.js`: apresentação de `RecomendacaoResponse` como texto.
-- `src/frontend/styles.css`: estilos do layout e dos resultados.
-
-O frontend consulta `/api/v1/culturas/opcoes` para o agricultor escolher a opção ZARC do município antes de chamar `/api/v1/recomendar`. A tela mostra janelas ZARC,
-avisos, pendências, indicadores NASA e orientações de manejo com evidências. Não existem respostas simuladas de contingência: falhas
-mostram uma mensagem e permitem repetir a consulta. Doses de calcário, impactos
-percentuais e séries NASA fictícias do protótipo foram removidos.
-
-A busca e a geocodificação reversa passam pelo backend, com o mesmo cliente,
-cache e limite de Nominatim usado na recomendação. Não são feitas requisições
-diretas do JavaScript ao Nominatim. A camada padrão carrega os tiles de
-`https://tile.openstreetmap.org/{z}/{x}/{y}.png`, sem chave CARTO. A camada de
-satélite usa Esri. A atribuição dos provedores permanece visível no mapa.
-O servidor público de tiles OpenStreetMap atende uso interativo moderado;
-não há download em lote ou recursos offline. Para maior escala, use um
-provedor contratado ou hospedagem própria conforme a política do serviço.
-
-## Organização do backend
-
-- `src/backend/main.py`: inicialização do FastAPI e registro das rotas.
-- `src/backend/modules/routes.py`: endpoints e composição das dependências.
-- `src/backend/models/recomendacao.py`: contratos de entrada e saída.
-- `src/backend/models/embrapa.py`: contratos das fontes, sem dependência de HTTP.
-- `src/backend/services/recomendacao.py`: seleção de cultura, filtros e orientações.
-- `src/backend/integration/embrapa.py`: clientes Agritec e RespondeAgro.
-- `src/backend/integration/localizacao.py`: coordenadas → município OpenStreetMap → código IBGE.
-- `src/backend/integration/nasa_power.py`: coleta NASA POWER e cache dos dados brutos.
-- `src/backend/services/clima.py`: qualidade dos dados e resumo dos últimos 18 meses completos.
-- `src/backend/services/manejo.py`: regras de orientação com evidências e referências.
-- `src/backend/services/zoneamento.py`: catálogo municipal, seleção e classificação das janelas ZARC.
-
-Conforme as funcionalidades crescerem, as rotas poderão ser separadas em
-arquivos por módulo, mantendo a inicialização em `main.py`.
-
-## Endpoints
+A API usa o prefixo `/api/v1` e compartilha a origem com a interface. O contrato completo de entrada e saída está disponível em `/docs`.
 
 | Método | Rota | Função |
 | --- | --- | --- |
-| GET | `/api/v1/health` | Verificar se a API está respondendo. |
-| GET | `/api/v1/localizacao/buscar?consulta=Ouro%20Preto%20MG` | Buscar um ponto e identificar seu município. |
-| GET | `/api/v1/localizacao/reversa?latitude=-20.3856&longitude=-43.5035` | Identificar o município do ponto selecionado. |
-| POST | `/api/v1/culturas/opcoes` | Listar opções ZARC por coordenadas, cultura e irrigação antes da recomendação. |
-| POST | `/api/v1/recomendar` | Combinar histórico NASA, janelas ZARC e orientações de manejo. |
+| `GET` | `/health` | Verifica se a API responde. |
+| `GET` | `/localizacao/buscar` | Busca uma localidade pelo texto informado. |
+| `GET` | `/localizacao/reversa` | Identifica a localidade de coordenadas. |
+| `POST` | `/culturas/opcoes` | Lista opções ZARC para município, cultura e irrigação. |
+| `POST` | `/recomendar` | Reúne clima, zoneamento e orientações. |
 
-Exemplo:
+O formulário envia localização, cultura, solo, pH, irrigação, histórico, objetivo e restrições. Quando há uma escolha no catálogo ZARC, também envia `id_cultura`. A resposta distingue janelas compatíveis das condicionadas à confirmação do solo e inclui fontes, avisos e pendências. Falhas de uma fonte não apagam os resultados disponíveis das demais.
 
-```bash
-curl -X POST http://127.0.0.1:8000/api/v1/recomendar \
-  -H 'Content-Type: application/json' \
-  -d '{"regiao_nome": "Araçatuba, SP", "historico_area": "monocultura_pousio", "objetivo": "recuperar_solo", "latitude": -21.2, "longitude": -50.4, "cultura_desejada": "milho", "tipo_solo": "argiloso", "ph": 5.5, "forma_irrigacao": "sem_irrigacao", "restricoes": "Pouca água disponível."}'
+## Como interpretar o resultado
+
+- O histórico da NASA POWER cobre os **18 meses completos anteriores à consulta**. A projeção de chuva repete médias mensais desse período; não é uma previsão meteorológica validada.
+- As janelas ZARC são filtradas por município, cultura, modalidade e solo, com risco de 20%. Uma janela compatível não valida todas as condições da propriedade nem afirma que é possível plantar hoje.
+- Textura do solo não é convertida automaticamente em classe de disponibilidade de água (AD1–AD6). Quando a classificação necessária não é conhecida, a janela aparece como condicional.
+- O modo de sensor usa um cenário teórico. A referência visual de 50% para estabelecimento, quando exibida sem uma estimativa da IA, é demonstrativa e não representa probabilidade calculada para a área.
+- As orientações não substituem avaliação agronômica, não validam uma sequência completa de rotação e não garantem produtividade, lucro ou aptidão para plantio. O sistema não calcula doses de corretivos ou fertilizantes.
+
+## Estrutura do projeto
+
+```text
+src/
+├── backend/
+│   ├── integration/   # NASA POWER, Embrapa, Gemini e localização
+│   ├── models/        # contratos de entrada e saída
+│   ├── modules/       # rotas HTTP
+│   ├── services/      # clima, zoneamento, manejo e recomendação
+│   └── tests/
+└── frontend/
+    ├── index.html     # interface em três etapas
+    ├── app.js         # navegação e estado da consulta
+    ├── api.js         # comunicação com o backend
+    ├── results.js     # apresentação dos resultados
+    └── tests/
 ```
 
-## Configuração das fontes
+## Testes
 
-Configure no ambiente do backend, sem expor tokens ao frontend:
-
-- `EMBRAPA_ACCESS_TOKEN`: token de uma aplicação inscrita na Agritec.
-- `EMBRAPA_RESPONDEAGRO_TOKEN`: token da RespondeAgro. Se omitido, utiliza o
-  mesmo token acima, que deve ter inscrição nas duas APIs.
-- `NOMINATIM_USER_AGENT`: identificação da aplicação, preferencialmente com
-  contato do responsável (padrão: `AgroOrbit/0.1`).
-- `NOMINATIM_BASE_URL`: provedor de geocodificação, com HTTPS. Padrão:
-  `https://nominatim.openstreetmap.org`.
-
-A NASA POWER não exige token. Sem os tokens Embrapa, o serviço retorna as
-orientações climáticas disponíveis e informa que a janela ZARC e as referências
-Agritec/RespondeAgro não foram validadas; não inventa respostas dessas APIs.
-
-Os clientes são criados na primeira consulta e compartilhados no processo.
-Reinicie o servidor depois de alterar a configuração.
-
-O Nominatim público tem cache local e limite de uma requisição por segundo
-por processo. Execute este MVP com **um worker e uma instância**. Para escalar,
-substitua o provedor por um serviço próprio/contratado. Exiba na interface a
-atribuição **© OpenStreetMap contributors** com link para
-https://www.openstreetmap.org/copyright. A geocodificação pode ser imprecisa em
-divisas; a resposta expõe o município identificado para conferência.
-
-## Contrato e comportamento
-
-Não são aceitos os campos antigos `prioridade`, `historico` nem `risco`.
-O contrato atual recebe `historico_area` e `objetivo`. `id_cultura` é opcional:
-a interface o acrescenta após a escolha explícita de uma opção do catálogo.
-O servidor confere se esse ID corresponde ao município, cultura e modalidade.
-O risco ZARC é fixado internamente em 20%.
-
-- `regiao_nome`: nome de região informado pelo frontend (até 200 caracteres).
-  As coordenadas determinam o município consultado. Divergência do nome/UF
-  informado gera aviso; não substitui o município obtido na geocodificação.
-- `historico_area` e `objetivo`: textos obrigatórios de até 200 caracteres,
-  aceitando os códigos do frontend, como `monocultura_pousio` e `recuperar_solo`.
-  São preservados em `dados_informados` e utilizados como termos de busca na
-  RespondeAgro. Objetivos de recuperar solo/conservar água também acionam
-  orientações gerais de cobertura, com referência técnica. Não representam
-  diagnóstico ou seleção automática de uma espécie de rotação.
-- `tipo_solo`: `arenoso`, `argiloso`, `textura_media`, `raso`, ou `AD1` a `AD6`.
-  Textura não é convertida automaticamente em classe de disponibilidade de água.
-  A opção de terra mista da interface envia `textura_media`. `raso` descreve
-  profundidade, sem informar textura ou classe AD; janelas de classes
-  conhecidas ficam condicionadas à confirmação da classificação do solo.
-  O formulário oferece uma opção avançada para informar AD1–AD6 somente
-  quando a classe já for conhecida por avaliação técnica.
-- `forma_irrigacao`: `sem_irrigacao`, `gotejamento`, `aspersao`, `pivo_central`,
-  `microaspersao`, `superficie` ou `outra`.
-- `ph`: número entre 0 e 14; preservado como contexto. Sem método de medição e
-  análise completa, o sistema não calcula dose de calcário ou fertilizante.
-- `restricoes`: texto opcional de até 2.000 caracteres. É registrado como
-  pendência de avaliação técnica, sem interpretação automática nesta versão.
-
-A resposta contém `status`, município, cultura selecionada, janelas com solo,
-ciclo, safra e portaria, orientações, referências, pendências e avisos.
-`orientacao_condicional` indica que existe histórico climático utilizável ou
-janelas ZARC compatíveis ou condicionais para fundamentar orientações. Não significa aptidão da
-cultura ou que todas as condições da propriedade foram validadas.
-`dados_insuficientes` indica ausência dessas bases. Pendências descrevem
-explicitamente o que não foi validado, mesmo quando há orientações disponíveis.
-Nomes ambíguos retornam opções para escolha explícita, sem selecionar um ID
-arbitrário. Catálogos sem correspondência não comprovam inaptidão.
-
-Sem data de plantio, apresentamos as janelas e os anos de safra retornados,
-sem afirmar que se pode plantar hoje. O histórico resumido da área não informa
-espécies e datas; não validamos uma sequência de rotação. A RespondeAgro retorna referências de publicações, não prescrições
-personalizadas; textos são devolvidos sem marcação HTML.
-
-## Consulta e diagnóstico ZARC
-
-O catálogo é consultado por município em
-`GET /municipios/{codigoIBGE}/culturas`. O catálogo global continua disponível
-no cliente para outros usos, mas não é usado para selecionar a cultura neste
-fluxo. Nomes completos identificados de forma única são aceitos. Correspondências
-mais amplas, como `milho` para safras diferentes, são oferecidas como opções,
-mesmo quando existe apenas uma opção com nome mais específico. O frontend
-preserva o ID da opção selecionada; IDs de outro município, modalidade ou
-cultura são recusados na seleção. Nenhum ID é escolhido arbitrariamente.
-
-O contrato de resposta acrescenta:
-
-- `status_zarc` e `mensagem_zarc`: resultado específico da consulta, independente
-  do sucesso da NASA ou do status geral de recomendação.
-- `janelas_confirmadas`: períodos que correspondem exatamente ao solo e à
-  modalidade informados, sempre no risco de 20%. A palavra "confirmadas" se
-  refere aos filtros; não constitui validação completa da propriedade.
-- `janelas_condicionais`: períodos que dependem da confirmação de uma outra
-  classificação de solo. Cada item inclui `condicao` e mantém solo, ciclo,
-  safra, risco e portaria originais.
-- `diagnostico_zarc`: etapa, município, cultura selecionada, risco consultado,
-  quantidade recebida, descartes por filtro e solos disponíveis.
-
-`janelas` é mantido como alias de `janelas_confirmadas`, sem duplicar o estado
-interno. Janelas condicionais não são misturadas às confirmadas nem usadas para
-recomendar uma época de plantio validada. Textura não é convertida em AD, classes
-AD diferentes não são tratadas como equivalentes e o risco não é aumentado
-para conseguir resultados.
-
-Estados de resultado: `disponivel`, `parcial`, `classe_solo_pendente`,
-`cultura_ambigua`, `cultura_nao_encontrada`, `cultura_invalida`,
-`modalidade_indisponivel`, `sem_dados`, `sem_dados_compativeis`,
-`nao_configurado`, `falha_autenticacao`, `limite_consultas`, `falha_conexao`,
-`resposta_invalida` e `falha_api`.
-
-O transporte AgroAPI aceita JSON simples ou gzip. Erros de autenticação, limite,
-conexão e formato são preservados no diagnóstico, sem virar uma lista vazia.
-A interface mostra os dois grupos, permite revisar o solo e exibe contagens
-para distinguir ausência de dados de janelas descartadas pelos filtros.
-
-## NASA e recomendações
-
-Na etapa 2, **Ver sensor da área** ativa um cenário teórico para demonstração
-acadêmica. Não há conexão com Arduino: cultura, solo, pH e manejo são hipóteses
-identificadas no formulário e no resultado. Umidade e temperatura ilustrativas
-não entram no contrato da API. O modo manual continua separado.
-
-A tela de resultados mostra o histórico NASA, uma projeção de chuva para os
-próximos 12 meses e uma sugestão breve de rotação. A projeção repete a média
-observada de cada mês do ano no histórico recente de 18 meses; ela não é um
-modelo meteorológico validado. O Gemini recebe a projeção na mesma chamada
-que recebe os dados do agricultor e as demais fontes. Pode gerar uma estimativa
-**exploratória** de 0 a 100% para o **estabelecimento das culturas** sugeridas,
-com justificativa curta. A interface identifica essa estimativa como exploratória.
-Se o Gemini não fornecer um percentual, a tela apresenta **50% apenas como
-referência visual demonstrativa**, sem afirmar que é a probabilidade desta área.
-Esse valor não é enviado ao Gemini. O serviço também aceita um
-adaptador opcional `previsao_chuva` que implemente `obter_previsao(latitude,
-longitude)` e devolva `PrevisaoChuva`, para uma fonte futura separada da NASA.
-Quando `estimativa_estabelecimento` trouxer probabilidade calibrada, o Gemini
-deve copiar exatamente esse valor e citar sua fonte.
-
-A consulta inicial do frontend continua com dez campos; a escolha de uma
-opção específica pode acrescentar `id_cultura`. O backend escolhe
-os 18 meses completos anteriores ao mês atual (em novembro de 2026:
-01/05/2025 a 31/10/2026), sem incluir o mês em andamento, e chama a
-função existente `request_NASA_API`. O cache em
-`src/backend/data/raw/nasa_power/` é reutilizado, fica fora do Git e mantém
-`response.json` e `metadata.json` para cada consulta. Dados em cache
-não têm expiração automática; `force_refresh=True` permite atualizar a coleta.
-
-`analise_climatica_realizada` é `true` somente quando o resumo foi calculado
-com unidades reconhecidas e pelo menos 90% dos dias válidos em chuva e
-temperatura média. `resumo_climatico` inclui período, cobertura por parâmetro,
-médias mensais, chuva acumulada nos últimos 12 meses completos, chuva média
-por ano civil quando disponível, temperaturas, radiação e sequência máxima
-de dias com precipitação inferior a 1 mm/dia. Valores ausentes não viram zero.
-Totais de chuva exigem meses/anos completos; um total incompleto é omitido.
-Uma janela de 18 meses pode não conter um ano civil completo; nesse caso, a
-chuva média por ano civil fica ausente e um aviso explica a limitação. O total
-móvel de 12 meses continua disponível quando todos os dias desse intervalo
-têm chuva válida. Se um mês tiver ao menos 90% dos dias válidos, os dias
-ausentes são estimados pela média diária desse mês e o valor é identificado
-como estimativa; abaixo disso o total é omitido. A quantidade de
-observações completas de cada mês permanece explícita em `anos_chuva_completos`.
-Radiação é normalizada para **MJ/m²/dia** e a umidade é **relativa do ar a 2 m**,
-não umidade das raízes. Lacunas e limitações são apresentadas na resposta.
-
-O campo `resumo_climatico.projecao_chuva` estima os próximos 12 meses completos,
-começando no mês seguinte ao da consulta. Para cada mês futuro, repete a média
-dos totais daquele mês do ano encontrados nos 18 meses históricos. Por exemplo,
-dois janeiros com 180 e 220 mm geram uma estimativa de 200 mm para o próximo janeiro.
-Cada item informa ano, mês, `precipitacao_estimada_mm` e quantidade de meses
-históricos completos utilizados; `total_estimado_mm` soma as 12 estimativas.
-Se um mês não tiver histórico completo, sua estimativa e o total ficam ausentes,
-sem tratar lacunas como zero. O frontend exibe as estimativas e o total.
-É uma projeção sazonal simples para o protótipo, sem treinamento ou novas
-dependências; assume repetição do padrão recente, não uma previsão meteorológica validada.
-
-As regras de manejo são separadas da coleta e explicam seus fundamentos:
-
-- Janelas compatíveis → orientar o planejamento dentro das condições ZARC.
-- Sequências sem chuva observadas → orientar conservação de água e cobertura,
-  distinguindo sequeiro de cultivo irrigado, sem calcular lâmina de irrigação.
-- Médias mensais válidas com pelo menos duas observações completas para cada
-  um dos 12 meses → contextualizar a sazonalidade em relação às janelas
-  disponíveis; não ampliar a janela oficial nem prever as próximas chuvas.
-  A janela padrão de 18 meses não atende a esse requisito, portanto essa
-  orientação é omitida; os indicadores mensais continuam disponíveis.
-- Objetivo de recuperação/conservação → orientar cobertura e planejamento da
-  diversificação, sem recomendar uma espécie sem validação local.
-
-Os itens em `orientacoes` possuem texto, fonte, evidências e link quando
-aplicável. O histórico recente de 18 meses não é uma normal climatológica,
-uma previsão de safra ou uma projeção de mudanças climáticas. Não há cálculo
-de dose de calcário/adubo nem garantia de produtividade, lucro ou aptidão.
-Restrições livres continuam registradas para avaliação técnica.
-
-Falhas da NASA, Agritec ou RespondeAgro preservam as demais fontes e aparecem
-em avisos/pendências. Localização não identificável retorna 422 e falhas de
-rede na localização, 502. Configuração inválida no servidor retorna 503.
-O serviço recebe dependências por `Protocol`; testes podem substituir as
-fontes sem acessar a rede. Não há consultas externas ao importar a API.
-
-## Verificação
-
-Os testes ficam junto da aplicação que verificam:
-
-- `src/backend/tests/`: pytest para NASA POWER/cache, resumo climático, regras de recomendação, adaptadores e contratos HTTP.
-- `src/frontend/tests/frontend.test.mjs`: testes unitários do contrato HTTP e da apresentação dos resultados com o runner nativo do Node.
-- `src/frontend/tests/wizard.spec.js`: testes de comportamento no Chromium com Playwright (navegação, localização, validação, envio, carregamento, erros, repetição e exportação).
-
-Execute a partir da raiz do repositório (Python 3.12 e Node 22 ou superior):
+Os testes usam fontes simuladas e não consomem chamadas das APIs externas. Para executar a partir da raiz:
 
 ```bash
 python -m pip install -r requirements-dev.txt
@@ -330,60 +114,17 @@ npx playwright install chromium
 npm test
 ```
 
-Os testes usam fontes simuladas e não consomem requisições das APIs.
-Os testes unitários JavaScript usam o runner nativo do Node. Para executar também
-os testes de navegador (Playwright), a partir da raiz do repositório:
+Os testes de navegador usam Chromium; os demais testes do frontend usam o runner nativo do Node.js. Recomenda-se Node.js 22 ou superior.
 
-```bash
-npm --prefix src/frontend ci
-npm --prefix src/frontend exec -- playwright install chromium
-npm --prefix src/frontend test
-```
+## Uso de IA generativa no desenvolvimento
 
-Para executar apenas o cenário de seleção de cultura ambígua:
+Este projeto foi desenvolvido com o auxílio de ferramentas de IA Generativa (Codex). A tecnologia foi utilizada como copiloto de desenvolvimento ("vibe coding") para acelerar a ideação, estruturação da arquitetura do back-end em Python/FastAPI, construção da interface front-end com TailwindCSS/Vanilla JS e integração com as APIs oficiais da NASA POWER e Embrapa.
 
-```bash
-npm --prefix src/frontend run test:browser -- --grep "ambiguous culture"
-```
+## Referências
 
-O `package.json` fica em `src/frontend`; `npm test` na raiz não é configurado.
-
-## Referências das integrações
-
-- [Agritec v2](https://www.agroapi.cnptia.embrapa.br/store/api-docs/agroapi/Agritec/v2)
-- [RespondeAgro v1](https://www.agroapi.cnptia.embrapa.br/store/api-docs/agroapi/RespondeAgro/v1)
-- [Política Nominatim](https://operations.osmfoundation.org/policies/nominatim/)
-- [Localidades IBGE](https://servicodados.ibge.gov.br/api/docs/localidades)
-- [NASA POWER — dados diários](https://power.larc.nasa.gov/docs/services/api/temporal/daily/)
-- [Embrapa — rotação e cobertura do solo](https://www.embrapa.br/web/agencia-de-informacao-tecnologica/cultivos/milho/producao/rotacao-de-culturas)
-
-### Orientação personalizada com Gemini (opcional)
-
-Instale `requirements.txt` e configure `GEMINI_API_KEY` no ambiente do servidor.
-O código não carrega arquivos `.env` automaticamente. Nunca coloque a chave no
-frontend ou no Git. `GEMINI_MODEL` permite substituir o modelo padrão
-`gemini-3.1-flash-lite`. Reinicie o servidor ao alterar essas variáveis.
-
-Após reunir as fontes, `RecomendacaoService` envia um snapshot JSON com todos
-os campos do formulário (cultura, solo, pH, histórico, irrigação, objetivo,
-restrições e localização), o resumo NASA com período/cobertura/avisos,
-referências Embrapa, janelas ZARC confirmadas e condicionais, diagnóstico,
-orientações existentes e pendências. Quando há classe ZARC, a descrição original
-do solo é preservada em `tipo_solo_informado`. O histórico NASA bruto continua
-no fluxo existente; a IA recebe os indicadores calculados, não a série diária.
-
-A resposta de `/api/v1/recomendar` inclui `explicacao_ia` (`resumo`, `actions`)
-e `status_ia`: `nao_configurado`, `disponivel` ou `indisponivel`. A interface
-mostra a explicação como conteúdo principal em “Sua orientação personalizada”:
-um resumo de até 360 caracteres e até três ações de até 220 caracteres cada.
-As orientações gerais aparecem apenas quando a personalização não está disponível.
-As pendências ZARC continuam acessíveis e os dados técnicos ficam recolhidos.
-Sem chave, a tela usa as orientações gerais; em falhas, informa a indisponibilidade. A explicação
-também permanece no JSON exportado. Cada ação cita IDs de `evidencias_contexto`; IDs desconhecidos
-invalidam a geração. Essa checagem não comprova a correção agronômica do texto.
-
-A integração usa cliente injetável, saída estruturada e timeout HTTP de 30 s,
-sem estado de conversa armazenado (`store=False`). Sem chave, não chama Gemini;
-em falhas de geração, preserva os resultados existentes e informa um aviso.
-A geração não altera a validação de restrições, cálculos climáticos ou filtros
-ZARC. Testes sem rede: `python -m pytest src/backend/tests/test_gemini_api.py`.
+- [NASA POWER — API de dados diários](https://power.larc.nasa.gov/docs/services/api/temporal/daily/)
+- [Embrapa Agritec v2](https://www.agroapi.cnptia.embrapa.br/store/api-docs/agroapi/Agritec/v2)
+- [Embrapa RespondeAgro v1](https://www.agroapi.cnptia.embrapa.br/store/api-docs/agroapi/RespondeAgro/v1)
+- [IBGE — API de localidades](https://servicodados.ibge.gov.br/api/docs/localidades)
+- [Nominatim — política de uso](https://operations.osmfoundation.org/policies/nominatim/)
+- [OpenStreetMap — direitos autorais e atribuição](https://www.openstreetmap.org/copyright)
