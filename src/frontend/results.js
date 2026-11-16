@@ -109,14 +109,19 @@ export function renderGemini(data) {
   const rotation = document.getElementById("rotationSuggestion");
   const probability = document.getElementById("rotationProbability");
   const estimate = document.getElementById("rotationEstimate");
-  estimate.classList.toggle("hidden", true);
-  document.getElementById("rotationEstimateLabel").textContent = "";
-  document.getElementById("rotationProbabilityValue").textContent = "";
-  document.getElementById("rotationEstimateNote").textContent = "";
+  const estimateLabel = document.getElementById("rotationEstimateLabel");
+  const estimateValue = document.getElementById("rotationProbabilityValue");
+  const estimateNote = document.getElementById("rotationEstimateNote");
+  const illustrative = typeof data.estimativa_demonstrativa_pct === "number"
+    ? data.estimativa_demonstrativa_pct : 50;
+  estimate.classList.toggle("hidden", false);
+  estimateLabel.textContent = "Exemplo numérico ilustrativo";
+  estimateValue.textContent = `${illustrative.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+  estimateNote.textContent = "Valor de demonstração, sem cálculo de probabilidade para esta área";
   summary.textContent = "";
   actions.replaceChildren();
   rotation.textContent = "A sugestão de rotação não foi gerada nesta consulta.";
-  probability.textContent = "Revise a projeção de chuva acima e consulte novamente para obter a estimativa.";
+  probability.textContent = "";
   const output = data.explicacao_ia;
   const available = data.status_ia === "disponivel" && typeof output?.resumo === "string"
     && Array.isArray(output.actions);
@@ -133,9 +138,9 @@ export function renderGemini(data) {
     rotation.textContent = output.sugestao_rotacao.orientacao;
     if (typeof output.sugestao_rotacao.probabilidade_estabelecimento_pct === "number") {
       estimate.classList.toggle("hidden", false);
-      document.getElementById("rotationEstimateLabel").textContent = "Chance de estabelecimento";
-      document.getElementById("rotationProbabilityValue").textContent = `${output.sugestao_rotacao.probabilidade_estabelecimento_pct.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
-      document.getElementById("rotationEstimateNote").textContent = data.estimativa_estabelecimento
+      estimateLabel.textContent = "Chance de estabelecimento";
+      estimateValue.textContent = `${output.sugestao_rotacao.probabilidade_estabelecimento_pct.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+      estimateNote.textContent = data.estimativa_estabelecimento
         ? "Estimativa calibrada" : "Estimativa exploratória pelo Gemini";
       probability.textContent = "";
     } else {

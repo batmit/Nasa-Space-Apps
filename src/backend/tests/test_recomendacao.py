@@ -143,7 +143,7 @@ class RecomendacaoTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/v1/health").json(), {"status": "ok"})
 
     def test_frontend_e_api_compartilham_origem(self):
-        self.assertIn("AgroOrbit", self.client.get("/").text)
+        self.assertIn("AgroBit", self.client.get("/").text)
         for asset in ("app.js", "api.js", "results.js", "styles.css"):
             self.assertEqual(self.client.get("/" + asset).status_code, 200)
         self.assertIn("/api/v1/recomendar", self.client.get("/api.js").text)

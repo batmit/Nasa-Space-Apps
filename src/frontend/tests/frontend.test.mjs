@@ -394,17 +394,27 @@ test("Gemini aparece como interpretação, preserva evidências e limpa dados an
   assert.equal(nodes.get("rotationProbabilityValue").textContent, "68%");
   assert.equal(nodes.get("rotationEstimateNote").textContent, "Estimativa exploratória pelo Gemini");
   assert.equal(nodes.get("rotationProbability").textContent, "");
+  renderGemini({ status_ia: "disponivel", estimativa_demonstrativa_pct: 50, explicacao_ia: {
+    resumo: "Planeje a sucessão.", actions: [],
+    sugestao_rotacao: { orientacao: "Mantenha cobertura no solo.",
+      probabilidade_estabelecimento_pct: null, justificativa: "Projeção insuficiente." },
+  } });
+  assert.equal(nodes.get("rotationSuggestion").textContent, "Mantenha cobertura no solo.");
+  assert.equal(nodes.get("rotationProbabilityValue").textContent, "50%");
+  assert.match(nodes.get("rotationEstimateNote").textContent, /sem cálculo de probabilidade/);
   renderGemini({ status_ia: "indisponivel", explicacao_ia: null });
   assert.equal(nodes.get("aiGuidance").hidden, true);
   assert.equal(nodes.get("aiSummary").textContent, "");
   assert.equal(nodes.get("aiActions").children.length, 0);
   assert.match(nodes.get("rotationSuggestion").textContent, /não foi gerada nesta consulta/);
-  assert.equal(nodes.get("rotationEstimate").hidden, true);
-  assert.equal(nodes.get("rotationProbabilityValue").textContent, "");
+  assert.equal(nodes.get("rotationEstimate").hidden, false);
+  assert.equal(nodes.get("rotationProbabilityValue").textContent, "50%");
+  assert.match(nodes.get("rotationEstimateNote").textContent, /sem cálculo de probabilidade/);
   assert.equal(nodes.get("fallbackGuidance").hidden, false);
   assert.equal(nodes.get("diagText").hidden, false);
   renderGemini({ status_ia: "nao_configurado" });
   renderGemini({ status_ia: "disponivel", explicacao_ia: {} });
   assert.equal(nodes.get("aiGuidance").hidden, true);
   assert.equal(nodes.get("fallbackGuidance").hidden, false);
+  assert.equal(nodes.get("rotationProbabilityValue").textContent, "50%");
 });

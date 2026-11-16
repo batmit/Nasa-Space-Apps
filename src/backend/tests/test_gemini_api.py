@@ -70,6 +70,7 @@ def resposta(dados):
 
 def test_contexto_preserva_todos_campos_e_fontes_sem_alterar_resposta(resposta, dados):
     antes = resposta.model_dump_json()
+    assert resposta.estimativa_demonstrativa_pct == 50
     contexto = montar_contexto_ia(resposta)
     assert contexto["dados_informados"] == dados.model_dump(mode="json")
     assert contexto["dados_informados"]["tipo_solo_informado"] == "raso"
@@ -78,6 +79,7 @@ def test_contexto_preserva_todos_campos_e_fontes_sem_alterar_resposta(resposta, 
     assert "nasa:resumo" in contexto["evidencias_contexto"]
     assert "embrapa:referencia:0" in contexto["evidencias_contexto"]
     assert "explicacao_ia" not in contexto
+    assert "estimativa_demonstrativa_pct" not in contexto
     assert resposta.model_dump_json() == antes
 
 

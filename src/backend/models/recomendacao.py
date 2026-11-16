@@ -139,6 +139,10 @@ class EstimativaEstabelecimento(BaseModel):
 
 class RecomendacaoResponse(BaseModel):
     status: Literal["orientacao_condicional", "dados_insuficientes"]
+    estimativa_demonstrativa_pct: float = Field(
+        default=50.0, ge=0, le=100,
+        description="Referência visual fixa para demonstração; não é probabilidade calculada para a área.",
+    )
     explicacao_ia: StructuredGeminiOutput | None = None
     status_ia: Literal["nao_configurado", "disponivel", "indisponivel"] = "nao_configurado"
     dados_informados: DadosAgricultor

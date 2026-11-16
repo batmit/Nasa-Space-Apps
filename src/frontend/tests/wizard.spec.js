@@ -337,7 +337,9 @@ test("Gemini interpretation is optional and a failure preserves source results",
   await expect(page.locator("#aiGuidance")).toBeHidden();
   await expect(page.locator("#aiSummary")).toBeEmpty();
   await expect(page.locator("#rotationSuggestion")).toContainText("não foi gerada nesta consulta");
-  await expect(page.locator("#rotationEstimate")).toBeHidden();
+  await expect(page.locator("#rotationEstimate")).toBeVisible();
+  await expect(page.locator("#rotationProbabilityValue")).toHaveText("50%");
+  await expect(page.locator("#rotationEstimateNote")).toContainText("sem cálculo de probabilidade");
   await expect(page.locator("#fallbackGuidance")).toBeVisible();
   await expect(page.locator("#pendingItems")).toContainText("Confirme a análise do solo.");
 });

@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from .modules.routes import router
 
 app = FastAPI(
-    title="AgroOrbit API",
+    title="AgroBit API",
     description="API para análise climática e comparação de rotações de culturas.",
     version="0.1.0",
 )

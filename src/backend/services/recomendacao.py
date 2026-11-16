@@ -21,7 +21,7 @@ class FonteOrientacaoIA(Protocol):
 def montar_contexto_ia(resposta: RecomendacaoResponse) -> dict:
     """Snapshot JSON das fontes já consultadas; não faz chamadas externas."""
     contexto = resposta.model_dump(
-        mode="json", exclude={"explicacao_ia", "status_ia", "janelas_confirmadas"},
+        mode="json", exclude={"explicacao_ia", "status_ia", "janelas_confirmadas", "estimativa_demonstrativa_pct"},
     )
     # JSON pointers evitam duplicar os dados e consumir tokens desnecessários.
     evidencias = {"usuario": "/dados_informados", "usuario:ph": "/dados_informados/ph"}

@@ -240,7 +240,9 @@ modelo meteorológico validado. O Gemini recebe a projeção na mesma chamada
 que recebe os dados do agricultor e as demais fontes. Pode gerar uma estimativa
 **exploratória** de 0 a 100% para o **estabelecimento das culturas** sugeridas,
 com justificativa curta. A interface identifica essa estimativa como exploratória.
-Se não houver projeção, não apresenta porcentagem. O serviço também aceita um
+Se o Gemini não fornecer um percentual, a tela apresenta **50% apenas como
+referência visual demonstrativa**, sem afirmar que é a probabilidade desta área.
+Esse valor não é enviado ao Gemini. O serviço também aceita um
 adaptador opcional `previsao_chuva` que implemente `obter_previsao(latitude,
 longitude)` e devolva `PrevisaoChuva`, para uma fonte futura separada da NASA.
 Quando `estimativa_estabelecimento` trouxer probabilidade calibrada, o Gemini
